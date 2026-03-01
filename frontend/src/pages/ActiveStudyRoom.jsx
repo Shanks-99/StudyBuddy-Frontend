@@ -488,6 +488,14 @@ const VideoPeer = ({ peer, name }) => {
     const ref = useRef();
 
     useEffect(() => {
+        // Handle race condition: stream might already be present
+        if (peer._remoteStreams && peer._remoteStreams[0]) {
+            if (ref.current) {
+                ref.current.srcObject = peer._remoteStreams[0];
+            }
+        }
+
+        // Also listen for future streams
         peer.on("stream", stream => {
             if (ref.current) {
                 ref.current.srcObject = stream;
