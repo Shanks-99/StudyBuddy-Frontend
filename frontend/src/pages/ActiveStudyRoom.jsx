@@ -42,6 +42,13 @@ const ActiveStudyRoom = () => {
     const [peers, setPeers] = useState([]); // Array of React components for remote videos
     const messagesEndRef = useRef(null);
 
+    // Bind stream to local video element when loading finishes
+    useEffect(() => {
+        if (!isLoading && stream && userVideoRef.current) {
+            userVideoRef.current.srcObject = stream;
+        }
+    }, [isLoading, stream]);
+
     // Initial load: Fetch old messages
     useEffect(() => {
         if (!user) {
