@@ -15,7 +15,7 @@ import {
     Loader2
 } from 'lucide-react';
 
-const SOCKET_SERVER_URL = `http://${window.location.hostname}:5000`;
+const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || 'https://studybuddy-backend-pl2i.onrender.com';
 
 const ActiveStudyRoom = () => {
     const { roomId } = useParams();

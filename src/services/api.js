@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: `http://${window.location.hostname}:5000/api`,
+    baseURL: process.env.REACT_APP_API_URL || "https://studybuddy-backend-pl2i.onrender.com/api",
     headers: {
         'Content-Type': 'application/json',
     },
