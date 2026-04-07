@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
@@ -15,12 +15,12 @@ import {
     Loader2
 } from 'lucide-react';
 
-const SOCKET_SERVER_URL = "http://localhost:5000";
+const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || 'https://studybuddy-backend-pl2i.onrender.com';
 
 const ActiveStudyRoom = () => {
     const { roomId } = useParams();
     const navigate = useNavigate();
-    const user = JSON.parse(localStorage.getItem('user'));
+    const user = useMemo(() => JSON.parse(localStorage.getItem('user')), []);
 
     // UI State
     const [roomDetails, setRoomDetails] = useState(null);
@@ -62,7 +62,12 @@ const ActiveStudyRoom = () => {
                     getRoomMessages(roomId),
                     getStudyRoom(roomId)
                 ]);
-                setMessages(history);
+                
+                // Preserve local pending messages during history sync
+                setMessages(prev => {
+                    const pending = prev.filter(m => m.isPending);
+                    return [...history, ...pending];
+                });
                 setRoomDetails(details);
             } catch (err) {
                 console.error("Failed to fetch room data:", err);
@@ -70,118 +75,139 @@ const ActiveStudyRoom = () => {
             }
         };
         fetchHistoryAndDetails();
-    }, [roomId, user, navigate]);
+        // Skip adding 'user' or 'navigate' to dependencies to prevent infinite loops or redundant fetches
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [roomId]);
 
     // Socket & WebRTC Initialization
     useEffect(() => {
         if (!user) return;
 
         socketRef.current = io(SOCKET_SERVER_URL);
+        const streamRef = { current: null };
 
-        // 1. Get user media (camera/mic)
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(currentStream => {
-                setStream(currentStream);
-                if (userVideoRef.current) {
-                    userVideoRef.current.srcObject = currentStream;
+        // --- Persistent Listeners (Chat & Room) ---
+        socketRef.current.on("receive-message", (message) => {
+            const incomingClientId = message.clientSideId ? String(message.clientSideId) : null;
+            const senderId = String(message.sender?._id || message.sender);
+            console.log(`[Chat] Received from server: ClientID=${incomingClientId}, ServerID=${message._id}, Sender=${senderId}`);
+            
+            setMessages(prev => {
+                const pendingIds = prev.filter(m => m.isPending).map(m => m.clientSideId);
+                let index = -1;
+                if (incomingClientId) {
+                    index = prev.findIndex(m => m.clientSideId && String(m.clientSideId) === incomingClientId);
                 }
-
-                // 2. Join the room on the socket server
-                socketRef.current.emit("join-room", {
-                    roomId,
-                    userId: user.id,
-                    name: user.name
-                });
-
-                // 3. Listen for participant list updates
-                socketRef.current.on("room-users", (users) => {
-                    setParticipants(users);
-                });
-
-                // 4. Listen for new users joining (Initiate WebRTC Offer)
-                socketRef.current.on("user-joined", (payload) => {
-                    // Create a new peer to offer a connection to the new user
-                    const peer = createPeer(payload.socketId, socketRef.current.id, currentStream);
-                    peersRef.current.push({
-                        peerID: payload.socketId,
-                        peer,
-                    });
-
-                    // Add video placeholder
-                    setPeers(users => [...users, { peerID: payload.socketId, peer }]);
-                });
-
-                // 5. Receive an offer from an existing user
-                socketRef.current.on("webrtc-offer", payload => {
-                    const peer = addPeer(payload.offer, payload.from, currentStream);
-                    peersRef.current.push({
-                        peerID: payload.from,
-                        peer,
-                    });
-
-                    setPeers(users => [...users, { peerID: payload.from, peer }]);
-                });
-
-                // 6. Receive answer to our offer
-                socketRef.current.on("webrtc-answer", payload => {
-                    const item = peersRef.current.find(p => p.peerID === payload.from);
-                    if (item && !item.peer.destroyed) {
-                        item.peer.signal(payload.answer);
-                    }
-                });
-
-                // 7. Receive ICE candidate
-                socketRef.current.on("webrtc-ice-candidate", payload => {
-                    const item = peersRef.current.find(p => p.peerID === payload.from);
-                    if (item && !item.peer.destroyed) {
-                        item.peer.signal(payload.candidate);
-                    }
-                });
-
-                // 8. Listen for incoming text messages
-                socketRef.current.on("receive-message", (message) => {
-                    setMessages(prev => [...prev, message]);
-                    scrollToBottom();
-                });
-
-                // 9. Handle user leaving
-                socketRef.current.on("user-left", (socketId) => {
-                    const peerObj = peersRef.current.find(p => p.peerID === socketId);
-                    if (peerObj) {
-                        peerObj.peer.destroy();
-                    }
-                    const newPeers = peersRef.current.filter(p => p.peerID !== socketId);
-                    peersRef.current = newPeers;
-                    setPeers(newPeers);
-                });
-
-                // 10. Handle room ending by host
-                socketRef.current.on("room-ended", () => {
-                    alert("This room has been ended by the host.");
-                    navigate('/studyroom');
-                });
-
-                setIsLoading(false);
-            })
-            .catch(err => {
-                console.error("Failed to get media devices:", err);
-                alert("Could not access camera/microphone. You can still use text chat.");
-                // Fallback: join without video
-                socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
-                socketRef.current.on("room-users", setParticipants);
-                socketRef.current.on("receive-message", (message) => setMessages(prev => [...prev, message]));
-                setIsLoading(false);
+                if (index === -1 && senderId === String(user.id)) {
+                    index = prev.findIndex(m => m.isPending && m.text === message.text);
+                }
+                if (index !== -1) {
+                    const newMessages = [...prev];
+                    newMessages[index] = { ...prev[index], ...message, isPending: false };
+                    return newMessages;
+                }
+                if (message._id && prev.some(m => m._id === message._id)) return prev;
+                return [...prev, { ...message, isPending: false }];
             });
+            scrollToBottom();
+        });
+
+        socketRef.current.on("room-users", (users) => {
+            setParticipants(users);
+            const currentSocketIds = users.map(u => u.socketId);
+            
+            // Remove stale peers
+            const stalePeers = peersRef.current.filter(p => !currentSocketIds.includes(p.peerID));
+            if (stalePeers.length > 0) {
+                stalePeers.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
+                peersRef.current = peersRef.current.filter(p => currentSocketIds.includes(p.peerID));
+                setPeers(peersRef.current);
+            }
+
+            // BACKFILL: connect to missing participants
+            if (streamRef.current) {
+                users.forEach(otherUser => {
+                    const alreadyConnected = peersRef.current.some(p => p.peerID === otherUser.socketId);
+                    if (!alreadyConnected && otherUser.socketId !== socketRef.current.id) {
+                        // FIX: Only initiate if our socket ID is lexicographically smaller to prevent race conditions
+                        if (socketRef.current.id < otherUser.socketId) {
+                            console.log(`[WebRTC] Initiating to: ${otherUser.socketId}`);
+                            const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
+                            peersRef.current.push({ peerID: otherUser.socketId, peer });
+                            setPeers([...peersRef.current]);
+                        }
+                    }
+                });
+            }
+        });
+
+        socketRef.current.on("room-ended", () => {
+            alert("This room has been ended by the host.");
+            navigate('/studyroom');
+        });
+
+        socketRef.current.on("user-left", (socketId) => {
+            const peerObj = peersRef.current.find(p => p.peerID === socketId);
+            if (peerObj) peerObj.peer.destroy();
+            peersRef.current = peersRef.current.filter(p => p.peerID !== socketId);
+            setPeers(peersRef.current);
+        });
+
+        // --- Persistent WebRTC Signaling Listeners ---
+        socketRef.current.on("webrtc-offer", payload => {
+            if (!streamRef.current) return;
+            const existing = peersRef.current.find(p => p.peerID === payload.from);
+            if (existing) existing.peer.destroy();
+            peersRef.current = peersRef.current.filter(p => p.peerID !== payload.from);
+            
+            const peer = addPeer(payload.offer, payload.from, streamRef.current);
+            peersRef.current.push({ peerID: payload.from, peer });
+            setPeers([...peersRef.current]);
+        });
+
+        socketRef.current.on("webrtc-answer", payload => {
+            const item = peersRef.current.find(p => p.peerID === payload.from);
+            if (item && !item.peer.destroyed) item.peer.signal(payload.answer);
+        });
+
+        socketRef.current.on("webrtc-ice-candidate", payload => {
+            const item = peersRef.current.find(p => p.peerID === payload.from);
+            if (item && !item.peer.destroyed) item.peer.signal(payload.candidate);
+        });
+
+        socketRef.current.on("user-joined", (payload) => {
+            // FIX: Removed duplicate peer generation.
+            // Peer logic is safely handled by the `room-users` listener with strict initiator logic.
+            console.log(`[WebRTC] User joined notification: ${payload.socketId}`);
+        });
+
+        // --- Media & Room Join ---
+        if (!navigator.mediaDevices) {
+            handleMediaFallback();
+        } else {
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(currentStream => {
+                    setStream(currentStream);
+                    streamRef.current = currentStream;
+                    if (userVideoRef.current) userVideoRef.current.srcObject = currentStream;
+                    socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
+                    setIsLoading(false);
+                })
+                .catch(err => {
+                    console.error("Media access failed:", err);
+                    handleMediaFallback();
+                });
+        }
+
+        function handleMediaFallback() {
+            socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
+            setIsLoading(false);
+        }
 
         return () => {
-            if (socketRef.current) {
-                socketRef.current.disconnect();
-            }
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
+            if (socketRef.current) socketRef.current.disconnect();
+            if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId]);
 
     // Auto-scroll chat
@@ -295,10 +321,32 @@ const ActiveStudyRoom = () => {
         e.preventDefault();
         if (!newMessage.trim()) return;
 
+        const clientSideId = `client-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        console.log(`[Chat] Sending message. ClientID: ${clientSideId}`);
+        
+        // Optimistic Update: Add message immediately
+        const optimisticMessage = {
+            roomId,
+            sender: {
+                _id: user.id,
+                name: user.name
+            },
+            text: newMessage,
+            clientSideId,
+            isPending: true,
+            createdAt: new Date().toISOString()
+        };
+
+        setMessages(prev => [...prev, optimisticMessage]);
+        scrollToBottom();
+
+        // Send to server
         socketRef.current.emit("send-message", {
             roomId,
             sender: user.id,
+            name: user.name, // Added name for fallback
             text: newMessage,
+            clientSideId
         });
 
         setNewMessage("");
@@ -388,10 +436,10 @@ const ActiveStudyRoom = () => {
                         </div>
 
                         {/* Remote Peer Videos */}
-                        {peers.map((peerObj, index) => {
+                        {peers.map((peerObj) => {
                             const remoteUser = participants.find(p => p.socketId === peerObj.peerID);
                             return (
-                                <VideoPeer key={index} peer={peerObj.peer} name={remoteUser?.name || 'User'} />
+                                <VideoPeer key={peerObj.peerID} peer={peerObj.peer} name={remoteUser?.name || 'User'} />
                             );
                         })}
 
@@ -453,8 +501,10 @@ const ActiveStudyRoom = () => {
                                 const isMe = senderId === user.id;
 
                                 return (
-                                    <div key={i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                                        <span className="text-xs text-gray-500 mb-1 ml-1">{senderName}</span>
+                                    <div key={msg._id || msg.clientSideId || `msg-${i}`} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} ${msg.isPending ? 'opacity-70' : 'opacity-100'}`}>
+                                        <span className="text-xs text-gray-500 mb-1 ml-1">
+                                            {senderName} {msg.isPending && '(sending...)'}
+                                        </span>
                                         <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-sm ${isMe ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-200 border border-white/5 rounded-tl-sm'}`}>
                                             {msg.text}
                                         </div>

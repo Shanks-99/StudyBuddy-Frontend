@@ -46,7 +46,7 @@ const QuizGenerator = () => {
         fetchQuizzes();
 
         // Socket.io connection
-        const socket = io('http://localhost:5000', {
+        const socket = io(process.env.REACT_APP_SOCKET_URL || 'https://studybuddy-backend-pl2i.onrender.com', {
             transports: ['websocket', 'polling'],
             withCredentials: true
         });

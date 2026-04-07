@@ -3,6 +3,12 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
+import process from 'process';
+import { Buffer } from 'buffer';
+
+// Polyfills for simple-peer (Webpack 5 removes Node built-ins)
+window.process = process;
+window.Buffer = Buffer;
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
