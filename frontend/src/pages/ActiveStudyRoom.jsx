@@ -259,17 +259,20 @@ const ActiveStudyRoom = () => {
             }
         });
 
-        // Set the remote offer right away
-        peer.signal(incomingSignal);
-
         // When SimplePeer generates an answer or ICE, send via Socket
         peer.on("signal", signal => {
             if (signal.type === 'answer') {
                 socketRef.current.emit("webrtc-answer", { answer: signal, to: callerID });
             } else if (signal.candidate) {
                 socketRef.current.emit("webrtc-ice-candidate", { candidate: signal, to: callerID });
+            } else if (signal.type === 'offer') {
+                // In case of renegotiation
+                socketRef.current.emit("webrtc-offer", { offer: signal, to: callerID });
             }
         });
+
+        // Set the remote offer right away
+        peer.signal(incomingSignal);
 
         return peer;
     }
@@ -546,7 +549,11 @@ const VideoPeer = ({ peer, name }) => {
 
     useEffect(() => {
         // Handle race condition: stream might already be present
-        if (peer._remoteStreams && peer._remoteStreams[0]) {
+        if (peer.streams && peer.streams[0]) {
+            if (ref.current) {
+                ref.current.srcObject = peer.streams[0];
+            }
+        } else if (peer._remoteStreams && peer._remoteStreams[0]) {
             if (ref.current) {
                 ref.current.srcObject = peer._remoteStreams[0];
             }
@@ -555,6 +562,12 @@ const VideoPeer = ({ peer, name }) => {
         // Also listen for future streams
         peer.on("stream", stream => {
             if (ref.current) {
+                ref.current.srcObject = stream;
+            }
+        });
+
+        peer.on("track", (track, stream) => {
+            if (ref.current && stream) {
                 ref.current.srcObject = stream;
             }
         });
