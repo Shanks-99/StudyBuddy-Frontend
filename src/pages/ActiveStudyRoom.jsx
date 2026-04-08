@@ -129,10 +129,13 @@ const ActiveStudyRoom = () => {
                 users.forEach(otherUser => {
                     const alreadyConnected = peersRef.current.some(p => p.peerID === otherUser.socketId);
                     if (!alreadyConnected && otherUser.socketId !== socketRef.current.id) {
-                        console.log(`[WebRTC] Backfilling: ${otherUser.socketId}`);
-                        const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
-                        peersRef.current.push({ peerID: otherUser.socketId, peer });
-                        setPeers([...peersRef.current]);
+                        // FIX: Only initiate if our socket ID is lexicographically smaller to prevent race conditions
+                        if (socketRef.current.id < otherUser.socketId) {
+                            console.log(`[WebRTC] Initiating to: ${otherUser.socketId}`);
+                            const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
+                            peersRef.current.push({ peerID: otherUser.socketId, peer });
+                            setPeers([...peersRef.current]);
+                        }
                     }
                 });
             }
@@ -173,14 +176,9 @@ const ActiveStudyRoom = () => {
         });
 
         socketRef.current.on("user-joined", (payload) => {
-            if (!streamRef.current) return;
-            const existing = peersRef.current.find(p => p.peerID === payload.socketId);
-            if (existing) existing.peer.destroy();
-            peersRef.current = peersRef.current.filter(p => p.peerID !== payload.socketId);
-
-            const peer = createPeer(payload.socketId, socketRef.current.id, streamRef.current);
-            peersRef.current.push({ peerID: payload.socketId, peer });
-            setPeers([...peersRef.current]);
+            // FIX: Removed duplicate peer generation.
+            // Peer logic is safely handled by the `room-users` listener with strict initiator logic.
+            console.log(`[WebRTC] User joined notification: ${payload.socketId}`);
         });
 
         // --- Media & Room Join ---
@@ -231,7 +229,17 @@ const ActiveStudyRoom = () => {
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' }
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:80',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:443',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    }
                 ]
             }
         });
@@ -256,13 +264,20 @@ const ActiveStudyRoom = () => {
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' }
+                    { urls: 'stun:global.stun.twilio.com:3478' },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:80',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    },
+                    { 
+                        urls: 'turn:openrelay.metered.ca:443',
+                        username: 'openrelayproject',
+                        credential: 'openrelayproject'
+                    }
                 ]
             }
         });
-
-        // Set the remote offer right away
-        peer.signal(incomingSignal);
 
         // When SimplePeer generates an answer or ICE, send via Socket
         peer.on("signal", signal => {
@@ -270,8 +285,14 @@ const ActiveStudyRoom = () => {
                 socketRef.current.emit("webrtc-answer", { answer: signal, to: callerID });
             } else if (signal.candidate) {
                 socketRef.current.emit("webrtc-ice-candidate", { candidate: signal, to: callerID });
+            } else if (signal.type === 'offer') {
+                // In case of renegotiation
+                socketRef.current.emit("webrtc-offer", { offer: signal, to: callerID });
             }
         });
+
+        // Set the remote offer right away
+        peer.signal(incomingSignal);
 
         return peer;
     }
@@ -548,7 +569,11 @@ const VideoPeer = ({ peer, name }) => {
 
     useEffect(() => {
         // Handle race condition: stream might already be present
-        if (peer._remoteStreams && peer._remoteStreams[0]) {
+        if (peer.streams && peer.streams[0]) {
+            if (ref.current) {
+                ref.current.srcObject = peer.streams[0];
+            }
+        } else if (peer._remoteStreams && peer._remoteStreams[0]) {
             if (ref.current) {
                 ref.current.srcObject = peer._remoteStreams[0];
             }
@@ -557,6 +582,12 @@ const VideoPeer = ({ peer, name }) => {
         // Also listen for future streams
         peer.on("stream", stream => {
             if (ref.current) {
+                ref.current.srcObject = stream;
+            }
+        });
+
+        peer.on("track", (track, stream) => {
+            if (ref.current && stream) {
                 ref.current.srcObject = stream;
             }
         });
