@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
@@ -85,6 +85,8 @@ const ActiveStudyRoom = () => {
 
         socketRef.current = io(SOCKET_SERVER_URL);
         const streamRef = { current: null };
+        // Queue signals that arrive before our stream is ready
+        const pendingSignals = [];
 
         // --- Persistent Listeners (Chat & Room) ---
         socketRef.current.on("receive-message", (message) => {
@@ -93,7 +95,6 @@ const ActiveStudyRoom = () => {
             console.log(`[Chat] Received from server: ClientID=${incomingClientId}, ServerID=${message._id}, Sender=${senderId}`);
             
             setMessages(prev => {
-                const pendingIds = prev.filter(m => m.isPending).map(m => m.clientSideId);
                 let index = -1;
                 if (incomingClientId) {
                     index = prev.findIndex(m => m.clientSideId && String(m.clientSideId) === incomingClientId);
@@ -121,17 +122,17 @@ const ActiveStudyRoom = () => {
             if (stalePeers.length > 0) {
                 stalePeers.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
                 peersRef.current = peersRef.current.filter(p => currentSocketIds.includes(p.peerID));
-                setPeers(peersRef.current);
+                setPeers([...peersRef.current]);
             }
 
-            // BACKFILL: connect to missing participants
+            // BACKFILL: connect to missing participants (only if stream is ready)
             if (streamRef.current) {
                 users.forEach(otherUser => {
                     const alreadyConnected = peersRef.current.some(p => p.peerID === otherUser.socketId);
                     if (!alreadyConnected && otherUser.socketId !== socketRef.current.id) {
-                        // FIX: Only initiate if our socket ID is lexicographically smaller to prevent race conditions
+                        // Only initiate if our socket ID is lexicographically smaller
                         if (socketRef.current.id < otherUser.socketId) {
-                            console.log(`[WebRTC] Initiating to: ${otherUser.socketId}`);
+                            console.log(`[WebRTC] Backfill: Initiating peer to ${otherUser.socketId}`);
                             const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
                             peersRef.current.push({ peerID: otherUser.socketId, peer });
                             setPeers([...peersRef.current]);
@@ -148,65 +149,88 @@ const ActiveStudyRoom = () => {
 
         socketRef.current.on("user-left", (socketId) => {
             const peerObj = peersRef.current.find(p => p.peerID === socketId);
-            if (peerObj) peerObj.peer.destroy();
+            if (peerObj && !peerObj.peer.destroyed) peerObj.peer.destroy();
             peersRef.current = peersRef.current.filter(p => p.peerID !== socketId);
-            setPeers(peersRef.current);
-        });
-
-        // --- Persistent WebRTC Signaling Listeners ---
-        socketRef.current.on("webrtc-offer", payload => {
-            if (!streamRef.current) return;
-            const existing = peersRef.current.find(p => p.peerID === payload.from);
-            if (existing) existing.peer.destroy();
-            peersRef.current = peersRef.current.filter(p => p.peerID !== payload.from);
-            
-            const peer = addPeer(payload.offer, payload.from, streamRef.current);
-            peersRef.current.push({ peerID: payload.from, peer });
             setPeers([...peersRef.current]);
         });
 
-        socketRef.current.on("webrtc-answer", payload => {
-            const item = peersRef.current.find(p => p.peerID === payload.from);
-            if (item && !item.peer.destroyed) item.peer.signal(payload.answer);
+        // --- UNIFIED WebRTC Signaling Listener (FIX #1) ---
+        socketRef.current.on("webrtc-signal", payload => {
+            const { signal, from } = payload;
+            console.log(`[WebRTC] Received signal from ${from}, type=${signal.type || 'ice-candidate'}`);
+
+            // If stream is not ready yet, queue the signal
+            if (!streamRef.current) {
+                console.log(`[WebRTC] Stream not ready, queuing signal from ${from}`);
+                pendingSignals.push(payload);
+                return;
+            }
+
+            handleIncomingSignal(from, signal, streamRef.current);
         });
 
-        socketRef.current.on("webrtc-ice-candidate", payload => {
-            const item = peersRef.current.find(p => p.peerID === payload.from);
-            if (item && !item.peer.destroyed) item.peer.signal(payload.candidate);
-        });
+        function handleIncomingSignal(from, signal, currentStream) {
+            const existingPeer = peersRef.current.find(p => p.peerID === from);
+
+            if (signal.type === 'offer') {
+                // New offer: destroy old peer if any, create a non-initiator peer
+                if (existingPeer && !existingPeer.peer.destroyed) {
+                    existingPeer.peer.destroy();
+                }
+                peersRef.current = peersRef.current.filter(p => p.peerID !== from);
+
+                console.log(`[WebRTC] Creating answer peer for offer from ${from}`);
+                const peer = addPeer(signal, from, currentStream);
+                peersRef.current.push({ peerID: from, peer });
+                setPeers([...peersRef.current]);
+            } else {
+                // answer or ICE candidate — forward to the existing peer
+                if (existingPeer && !existingPeer.peer.destroyed) {
+                    existingPeer.peer.signal(signal);
+                } else {
+                    console.warn(`[WebRTC] Received signal for unknown peer ${from}, ignoring`);
+                }
+            }
+        }
 
         socketRef.current.on("user-joined", (payload) => {
-            // FIX: Removed duplicate peer generation.
-            // Peer logic is safely handled by the `room-users` listener with strict initiator logic.
             console.log(`[WebRTC] User joined notification: ${payload.socketId}`);
         });
 
-        // --- Media & Room Join ---
+        // --- Media & Room Join (FIX #2: join-room AFTER stream ready) ---
+        function joinRoomAndProcessQueue() {
+            socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
+            setIsLoading(false);
+
+            // Process any signals that arrived before our stream was ready
+            if (pendingSignals.length > 0 && streamRef.current) {
+                console.log(`[WebRTC] Processing ${pendingSignals.length} queued signals`);
+                pendingSignals.forEach(p => handleIncomingSignal(p.from, p.signal, streamRef.current));
+                pendingSignals.length = 0;
+            }
+        }
+
         if (!navigator.mediaDevices) {
-            handleMediaFallback();
+            joinRoomAndProcessQueue();
         } else {
             navigator.mediaDevices.getUserMedia({ video: true, audio: true })
                 .then(currentStream => {
                     setStream(currentStream);
                     streamRef.current = currentStream;
                     if (userVideoRef.current) userVideoRef.current.srcObject = currentStream;
-                    socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
-                    setIsLoading(false);
+                    joinRoomAndProcessQueue();
                 })
                 .catch(err => {
                     console.error("Media access failed:", err);
-                    handleMediaFallback();
+                    joinRoomAndProcessQueue();
                 });
-        }
-
-        function handleMediaFallback() {
-            socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
-            setIsLoading(false);
         }
 
         return () => {
             if (socketRef.current) socketRef.current.disconnect();
             if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+            peersRef.current.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
+            peersRef.current = [];
         };
     }, [roomId]);
 
@@ -220,37 +244,57 @@ const ActiveStudyRoom = () => {
     }, [messages]);
 
 
-    // --- WebRTC Helpers ---
+    // --- ICE Server Configuration (FIX #4) ---
+    const iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' },
+        {
+            urls: 'turn:a.relay.metered.ca:80',
+            username: 'e8dd65b92f6aee9f74073532',
+            credential: 'uiadnxBjl+gFZrMi'
+        },
+        {
+            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
+            username: 'e8dd65b92f6aee9f74073532',
+            credential: 'uiadnxBjl+gFZrMi'
+        },
+        {
+            urls: 'turn:a.relay.metered.ca:443',
+            username: 'e8dd65b92f6aee9f74073532',
+            credential: 'uiadnxBjl+gFZrMi'
+        },
+        {
+            urls: 'turn:a.relay.metered.ca:443?transport=tcp',
+            username: 'e8dd65b92f6aee9f74073532',
+            credential: 'uiadnxBjl+gFZrMi'
+        }
+    ];
+
+    // --- WebRTC Helpers (FIX #1: Unified signaling) ---
     function createPeer(userToSignal, callerID, stream) {
         const peer = new Peer({
             initiator: true,
             trickle: true,
             stream,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                    { 
-                        urls: 'turn:openrelay.metered.ca:80',
-                        username: 'openrelayproject',
-                        credential: 'openrelayproject'
-                    },
-                    { 
-                        urls: 'turn:openrelay.metered.ca:443',
-                        username: 'openrelayproject',
-                        credential: 'openrelayproject'
-                    }
-                ]
-            }
+            config: { iceServers }
         });
 
-        // Whenever SimplePeer generates a signal (offer or ICE), send it via Socket
+        // Send ALL signals via unified event — no type filtering
         peer.on("signal", signal => {
-            if (signal.type === 'offer') {
-                socketRef.current.emit("webrtc-offer", { offer: signal, to: userToSignal });
-            } else if (signal.candidate) {
-                socketRef.current.emit("webrtc-ice-candidate", { candidate: signal, to: userToSignal });
-            }
+            console.log(`[WebRTC] createPeer signal -> to=${userToSignal}, type=${signal.type || 'ice'}`);
+            socketRef.current.emit("webrtc-signal", { signal, to: userToSignal });
+        });
+
+        peer.on("error", err => {
+            console.error(`[WebRTC] Peer error (initiator -> ${userToSignal}):`, err.message);
+        });
+
+        peer.on("connect", () => {
+            console.log(`[WebRTC] ✅ Connected to ${userToSignal}`);
         });
 
         return peer;
@@ -261,37 +305,24 @@ const ActiveStudyRoom = () => {
             initiator: false,
             trickle: true,
             stream,
-            config: {
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:global.stun.twilio.com:3478' },
-                    { 
-                        urls: 'turn:openrelay.metered.ca:80',
-                        username: 'openrelayproject',
-                        credential: 'openrelayproject'
-                    },
-                    { 
-                        urls: 'turn:openrelay.metered.ca:443',
-                        username: 'openrelayproject',
-                        credential: 'openrelayproject'
-                    }
-                ]
-            }
+            config: { iceServers }
         });
 
-        // When SimplePeer generates an answer or ICE, send via Socket
+        // Send ALL signals via unified event — no type filtering
         peer.on("signal", signal => {
-            if (signal.type === 'answer') {
-                socketRef.current.emit("webrtc-answer", { answer: signal, to: callerID });
-            } else if (signal.candidate) {
-                socketRef.current.emit("webrtc-ice-candidate", { candidate: signal, to: callerID });
-            } else if (signal.type === 'offer') {
-                // In case of renegotiation
-                socketRef.current.emit("webrtc-offer", { offer: signal, to: callerID });
-            }
+            console.log(`[WebRTC] addPeer signal -> to=${callerID}, type=${signal.type || 'ice'}`);
+            socketRef.current.emit("webrtc-signal", { signal, to: callerID });
         });
 
-        // Set the remote offer right away
+        peer.on("error", err => {
+            console.error(`[WebRTC] Peer error (responder -> ${callerID}):`, err.message);
+        });
+
+        peer.on("connect", () => {
+            console.log(`[WebRTC] ✅ Connected to ${callerID}`);
+        });
+
+        // Signal the incoming offer to start the handshake
         peer.signal(incomingSignal);
 
         return peer;
@@ -563,39 +594,58 @@ const ActiveStudyRoom = () => {
     );
 };
 
-// Sub-component to render remote peer streams
+// Sub-component to render remote peer streams (FIX #3: Robust stream attachment)
 const VideoPeer = ({ peer, name }) => {
     const ref = useRef();
+    const [hasStream, setHasStream] = useState(false);
 
     useEffect(() => {
-        // Handle race condition: stream might already be present
-        if (peer.streams && peer.streams[0]) {
-            if (ref.current) {
-                ref.current.srcObject = peer.streams[0];
-            }
-        } else if (peer._remoteStreams && peer._remoteStreams[0]) {
-            if (ref.current) {
-                ref.current.srcObject = peer._remoteStreams[0];
+        if (!peer || peer.destroyed) return;
+
+        function attachStream(stream) {
+            if (ref.current && stream) {
+                console.log(`[VideoPeer] Attaching stream for ${name}, tracks: ${stream.getTracks().map(t => t.kind + ':' + t.readyState).join(', ')}`);
+                ref.current.srcObject = stream;
+                setHasStream(true);
+                // Force play in case autoplay is blocked
+                ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
             }
         }
 
-        // Also listen for future streams
-        peer.on("stream", stream => {
-            if (ref.current) {
-                ref.current.srcObject = stream;
-            }
-        });
+        // Check all possible places where the stream may already exist
+        const existingStream = peer.streams?.[0] 
+            || peer._remoteStreams?.[0]
+            || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
+        
+        if (existingStream) {
+            attachStream(existingStream);
+        }
 
-        peer.on("track", (track, stream) => {
-            if (ref.current && stream) {
-                ref.current.srcObject = stream;
-            }
-        });
-    }, [peer]);
+        // Listen for future stream arrivals
+        const onStream = (stream) => attachStream(stream);
+        const onTrack = (track, stream) => attachStream(stream);
+
+        peer.on("stream", onStream);
+        peer.on("track", onTrack);
+
+        // Cleanup listeners on unmount or peer change
+        return () => {
+            peer.removeListener("stream", onStream);
+            peer.removeListener("track", onTrack);
+        };
+    }, [peer, name]);
 
     return (
         <div className="relative bg-gray-800 rounded-2xl overflow-hidden border border-white/10 shadow-lg group">
             <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" />
+            {!hasStream && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white animate-pulse">
+                        {name?.charAt(0)?.toUpperCase() || '?'}
+                    </div>
+                    <p className="absolute bottom-16 text-xs text-gray-400">Connecting...</p>
+                </div>
+            )}
             <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 text-sm font-medium rounded-lg text-white border border-white/10">
                 {name}
             </div>
