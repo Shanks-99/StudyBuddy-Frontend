@@ -39,6 +39,7 @@ const ActiveStudyRoom = () => {
     const socketRef = useRef();
     const userVideoRef = useRef();
     const peersRef = useRef([]); // Keeps track of peers { peerID, peer }
+    const iceCandidateQueues = useRef({}); // Per-peer ICE candidate queues
     const [peers, setPeers] = useState([]); // Array of React components for remote videos
     const messagesEndRef = useRef(null);
 
@@ -79,6 +80,69 @@ const ActiveStudyRoom = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId]);
 
+    // --- WebRTC Helper Functions (component-level so createPeer/addPeer can access them) ---
+
+    // Helper: flush queued ICE candidates for a peer
+    function flushIceCandidates(peerID) {
+        const queue = iceCandidateQueues.current[peerID];
+        if (queue && queue.length > 0) {
+            const peerObj = peersRef.current.find(p => p.peerID === peerID);
+            if (peerObj && !peerObj.peer.destroyed) {
+                console.log(`[WebRTC] Flushing ${queue.length} queued ICE candidates for ${peerID}`);
+                queue.forEach(candidate => {
+                    try {
+                        peerObj.peer.signal(candidate);
+                    } catch (e) {
+                        console.warn(`[WebRTC] Failed to signal queued ICE candidate:`, e.message);
+                    }
+                });
+            }
+            iceCandidateQueues.current[peerID] = [];
+        }
+    }
+
+    // Helper: remove a peer cleanly from refs and state
+    function removePeer(peerID) {
+        const peerObj = peersRef.current.find(p => p.peerID === peerID);
+        if (peerObj && !peerObj.peer.destroyed) peerObj.peer.destroy();
+        peersRef.current = peersRef.current.filter(p => p.peerID !== peerID);
+        delete iceCandidateQueues.current[peerID];
+        setPeers([...peersRef.current]);
+    }
+
+    // Helper: attach iceStateChange monitoring to detect dead connections
+    function monitorIceState(peer, peerID) {
+        peer.on('iceStateChange', (iceState) => {
+            console.log(`[WebRTC] ICE state for ${peerID}: ${iceState}`);
+            if (iceState === 'connected' || iceState === 'completed') {
+                // Connection established — flush any remaining queued candidates
+                flushIceCandidates(peerID);
+            }
+            if (iceState === 'failed' || iceState === 'closed') {
+                console.warn(`[WebRTC] ICE ${iceState} for ${peerID}, removing peer`);
+                removePeer(peerID);
+            }
+            if (iceState === 'disconnected') {
+                // Brief disconnects happen — wait 5s before removing
+                console.warn(`[WebRTC] ICE disconnected for ${peerID}, waiting 5s...`);
+                setTimeout(() => {
+                    const p = peersRef.current.find(x => x.peerID === peerID);
+                    if (p && !p.peer.destroyed) {
+                        try {
+                            const currentState = p.peer._pc?.iceConnectionState;
+                            if (currentState === 'disconnected' || currentState === 'failed') {
+                                console.warn(`[WebRTC] ICE still ${currentState} for ${peerID} after 5s, removing`);
+                                removePeer(peerID);
+                            }
+                        } catch (e) {
+                            // peer was already destroyed
+                        }
+                    }
+                }, 5000);
+            }
+        });
+    }
+
     // Socket & WebRTC Initialization
     useEffect(() => {
         if (!user) return;
@@ -117,10 +181,13 @@ const ActiveStudyRoom = () => {
             setParticipants(users);
             const currentSocketIds = users.map(u => u.socketId);
             
-            // Remove stale peers
+            // Remove stale peers (users who left)
             const stalePeers = peersRef.current.filter(p => !currentSocketIds.includes(p.peerID));
             if (stalePeers.length > 0) {
-                stalePeers.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
+                stalePeers.forEach(p => {
+                    if (!p.peer.destroyed) p.peer.destroy();
+                    delete iceCandidateQueues.current[p.peerID];
+                });
                 peersRef.current = peersRef.current.filter(p => currentSocketIds.includes(p.peerID));
                 setPeers([...peersRef.current]);
             }
@@ -148,13 +215,10 @@ const ActiveStudyRoom = () => {
         });
 
         socketRef.current.on("user-left", (socketId) => {
-            const peerObj = peersRef.current.find(p => p.peerID === socketId);
-            if (peerObj && !peerObj.peer.destroyed) peerObj.peer.destroy();
-            peersRef.current = peersRef.current.filter(p => p.peerID !== socketId);
-            setPeers([...peersRef.current]);
+            removePeer(socketId);
         });
 
-        // --- UNIFIED WebRTC Signaling Listener (FIX #1) ---
+        // --- UNIFIED WebRTC Signaling Listener ---
         socketRef.current.on("webrtc-signal", payload => {
             const { signal, from } = payload;
             console.log(`[WebRTC] Received signal from ${from}, type=${signal.type || 'ice-candidate'}`);
@@ -178,17 +242,47 @@ const ActiveStudyRoom = () => {
                     existingPeer.peer.destroy();
                 }
                 peersRef.current = peersRef.current.filter(p => p.peerID !== from);
+                // Clear any stale ICE queue for this peer
+                iceCandidateQueues.current[from] = [];
 
                 console.log(`[WebRTC] Creating answer peer for offer from ${from}`);
                 const peer = addPeer(signal, from, currentStream);
                 peersRef.current.push({ peerID: from, peer });
                 setPeers([...peersRef.current]);
-            } else {
-                // answer or ICE candidate — forward to the existing peer
+            } else if (signal.type === 'answer') {
+                // Answer — forward to existing peer, then flush ICE queue
                 if (existingPeer && !existingPeer.peer.destroyed) {
                     existingPeer.peer.signal(signal);
+                    // After remote description is set, flush queued ICE candidates
+                    setTimeout(() => flushIceCandidates(from), 100);
                 } else {
-                    console.warn(`[WebRTC] Received signal for unknown peer ${from}, ignoring`);
+                    console.warn(`[WebRTC] Received answer for unknown peer ${from}, ignoring`);
+                }
+            } else {
+                // ICE candidate
+                if (existingPeer && !existingPeer.peer.destroyed) {
+                    // Check if remote description is set (peer is ready for ICE candidates)
+                    const pc = existingPeer.peer._pc;
+                    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                        // Remote description is set — safe to signal
+                        try {
+                            existingPeer.peer.signal(signal);
+                        } catch (e) {
+                            console.warn(`[WebRTC] Error signaling ICE to ${from}, queuing:`, e.message);
+                            if (!iceCandidateQueues.current[from]) iceCandidateQueues.current[from] = [];
+                            iceCandidateQueues.current[from].push(signal);
+                        }
+                    } else {
+                        // Remote description NOT set — queue the ICE candidate
+                        console.log(`[WebRTC] Remote description not set for ${from}, queuing ICE candidate`);
+                        if (!iceCandidateQueues.current[from]) iceCandidateQueues.current[from] = [];
+                        iceCandidateQueues.current[from].push(signal);
+                    }
+                } else {
+                    // No peer yet — queue it (it may arrive before the offer is processed)
+                    console.log(`[WebRTC] No peer for ${from} yet, queuing ICE candidate`);
+                    if (!iceCandidateQueues.current[from]) iceCandidateQueues.current[from] = [];
+                    iceCandidateQueues.current[from].push(signal);
                 }
             }
         }
@@ -197,7 +291,7 @@ const ActiveStudyRoom = () => {
             console.log(`[WebRTC] User joined notification: ${payload.socketId}`);
         });
 
-        // --- Media & Room Join (FIX #2: join-room AFTER stream ready) ---
+        // --- Media & Room Join ---
         function joinRoomAndProcessQueue() {
             socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
             setIsLoading(false);
@@ -227,10 +321,20 @@ const ActiveStudyRoom = () => {
         }
 
         return () => {
-            if (socketRef.current) socketRef.current.disconnect();
+            // Clean up all socket listeners to prevent stacking on re-render
+            if (socketRef.current) {
+                socketRef.current.off("receive-message");
+                socketRef.current.off("room-users");
+                socketRef.current.off("room-ended");
+                socketRef.current.off("user-left");
+                socketRef.current.off("webrtc-signal");
+                socketRef.current.off("user-joined");
+                socketRef.current.disconnect();
+            }
             if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
             peersRef.current.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
             peersRef.current = [];
+            iceCandidateQueues.current = {};
         };
     }, [roomId]);
 
@@ -274,8 +378,11 @@ const ActiveStudyRoom = () => {
         }
     ];
 
-    // --- WebRTC Helpers (FIX #1: Unified signaling) ---
+    // --- WebRTC Helpers ---
     function createPeer(userToSignal, callerID, stream) {
+        // Initialize ICE candidate queue for this peer
+        iceCandidateQueues.current[userToSignal] = iceCandidateQueues.current[userToSignal] || [];
+
         const peer = new Peer({
             initiator: true,
             trickle: true,
@@ -283,7 +390,7 @@ const ActiveStudyRoom = () => {
             config: { iceServers }
         });
 
-        // Send ALL signals via unified event — no type filtering
+        // Send ALL signals via unified event
         peer.on("signal", signal => {
             console.log(`[WebRTC] createPeer signal -> to=${userToSignal}, type=${signal.type || 'ice'}`);
             socketRef.current.emit("webrtc-signal", { signal, to: userToSignal });
@@ -291,16 +398,28 @@ const ActiveStudyRoom = () => {
 
         peer.on("error", err => {
             console.error(`[WebRTC] Peer error (initiator -> ${userToSignal}):`, err.message);
+            if (err.message?.includes('User-Initiated Abort') || err.message?.includes('Ice connection failed')) {
+                // Remove the broken peer so user can reconnect
+                peersRef.current = peersRef.current.filter(p => p.peerID !== userToSignal);
+                delete iceCandidateQueues.current[userToSignal];
+                setPeers([...peersRef.current]);
+            }
         });
 
         peer.on("connect", () => {
             console.log(`[WebRTC] ✅ Connected to ${userToSignal}`);
         });
 
+        // Monitor ICE connection state for dead/failed connections
+        monitorIceState(peer, userToSignal);
+
         return peer;
     }
 
     function addPeer(incomingSignal, callerID, stream) {
+        // Initialize ICE candidate queue for this peer
+        iceCandidateQueues.current[callerID] = iceCandidateQueues.current[callerID] || [];
+
         const peer = new Peer({
             initiator: false,
             trickle: true,
@@ -308,7 +427,7 @@ const ActiveStudyRoom = () => {
             config: { iceServers }
         });
 
-        // Send ALL signals via unified event — no type filtering
+        // Send ALL signals via unified event
         peer.on("signal", signal => {
             console.log(`[WebRTC] addPeer signal -> to=${callerID}, type=${signal.type || 'ice'}`);
             socketRef.current.emit("webrtc-signal", { signal, to: callerID });
@@ -316,14 +435,43 @@ const ActiveStudyRoom = () => {
 
         peer.on("error", err => {
             console.error(`[WebRTC] Peer error (responder -> ${callerID}):`, err.message);
+            if (err.message?.includes('User-Initiated Abort') || err.message?.includes('Ice connection failed')) {
+                peersRef.current = peersRef.current.filter(p => p.peerID !== callerID);
+                delete iceCandidateQueues.current[callerID];
+                setPeers([...peersRef.current]);
+            }
         });
 
         peer.on("connect", () => {
             console.log(`[WebRTC] ✅ Connected to ${callerID}`);
+            // Flush any ICE candidates that arrived before connection was ready
+            const queue = iceCandidateQueues.current[callerID];
+            if (queue && queue.length > 0) {
+                console.log(`[WebRTC] Flushing ${queue.length} ICE candidates on connect for ${callerID}`);
+                queue.forEach(candidate => {
+                    try { peer.signal(candidate); } catch (e) { /* ignore */ }
+                });
+                iceCandidateQueues.current[callerID] = [];
+            }
         });
+
+        // Monitor ICE connection state for dead/failed connections
+        monitorIceState(peer, callerID);
 
         // Signal the incoming offer to start the handshake
         peer.signal(incomingSignal);
+
+        // After signaling the offer, flush any ICE candidates that arrived early
+        setTimeout(() => {
+            const queue = iceCandidateQueues.current[callerID];
+            if (queue && queue.length > 0) {
+                console.log(`[WebRTC] Post-offer flush: ${queue.length} ICE candidates for ${callerID}`);
+                queue.forEach(candidate => {
+                    try { peer.signal(candidate); } catch (e) { /* ignore */ }
+                });
+                iceCandidateQueues.current[callerID] = [];
+            }
+        }, 200);
 
         return peer;
     }
@@ -594,7 +742,7 @@ const ActiveStudyRoom = () => {
     );
 };
 
-// Sub-component to render remote peer streams (FIX #3: Robust stream attachment)
+// Sub-component to render remote peer streams — robust stream attachment with retry
 const VideoPeer = ({ peer, name }) => {
     const ref = useRef();
     const [hasStream, setHasStream] = useState(false);
@@ -602,23 +750,68 @@ const VideoPeer = ({ peer, name }) => {
     useEffect(() => {
         if (!peer || peer.destroyed) return;
 
+        let retryTimer = null;
+
         function attachStream(stream) {
             if (ref.current && stream) {
-                console.log(`[VideoPeer] Attaching stream for ${name}, tracks: ${stream.getTracks().map(t => t.kind + ':' + t.readyState).join(', ')}`);
-                ref.current.srcObject = stream;
-                setHasStream(true);
-                // Force play in case autoplay is blocked
-                ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
+                const tracks = stream.getTracks();
+                console.log(`[VideoPeer] Attaching stream for ${name}, tracks: ${tracks.map(t => t.kind + ':' + t.readyState).join(', ')}`);
+                
+                // Only attach if we have live tracks
+                if (tracks.length > 0 && tracks.some(t => t.readyState === 'live')) {
+                    ref.current.srcObject = stream;
+                    setHasStream(true);
+                    // Force play in case autoplay is blocked
+                    ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
+                    // Clear retry since we have a valid stream
+                    if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
+                }
             }
         }
 
         // Check all possible places where the stream may already exist
-        const existingStream = peer.streams?.[0] 
-            || peer._remoteStreams?.[0]
-            || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
-        
-        if (existingStream) {
-            attachStream(existingStream);
+        function tryAttachExisting() {
+            const existingStream = peer.streams?.[0] 
+                || peer._remoteStreams?.[0]
+                || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
+            
+            if (existingStream && existingStream.getTracks().length > 0) {
+                attachStream(existingStream);
+                return true;
+            }
+
+            // Also check via getReceivers on the underlying RTCPeerConnection
+            if (peer._pc && peer._pc.getReceivers) {
+                const receivers = peer._pc.getReceivers();
+                if (receivers.length > 0) {
+                    const tracks = receivers.map(r => r.track).filter(Boolean);
+                    if (tracks.length > 0) {
+                        const reconstructedStream = new MediaStream(tracks);
+                        attachStream(reconstructedStream);
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        // Try immediately
+        const attached = tryAttachExisting();
+
+        // If not attached yet, retry periodically (some peers take time)
+        if (!attached) {
+            retryTimer = setInterval(() => {
+                if (peer.destroyed) {
+                    clearInterval(retryTimer);
+                    retryTimer = null;
+                    return;
+                }
+                const success = tryAttachExisting();
+                if (success) {
+                    clearInterval(retryTimer);
+                    retryTimer = null;
+                }
+            }, 1000);
         }
 
         // Listen for future stream arrivals
@@ -628,10 +821,27 @@ const VideoPeer = ({ peer, name }) => {
         peer.on("stream", onStream);
         peer.on("track", onTrack);
 
+        // Also listen on the underlying RTCPeerConnection for ontrack
+        const pcOnTrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                attachStream(event.streams[0]);
+            } else if (event.track) {
+                const reconstructedStream = new MediaStream([event.track]);
+                attachStream(reconstructedStream);
+            }
+        };
+        if (peer._pc) {
+            peer._pc.addEventListener('track', pcOnTrack);
+        }
+
         // Cleanup listeners on unmount or peer change
         return () => {
+            if (retryTimer) clearInterval(retryTimer);
             peer.removeListener("stream", onStream);
             peer.removeListener("track", onTrack);
+            if (peer._pc) {
+                peer._pc.removeEventListener('track', pcOnTrack);
+            }
         };
     }, [peer, name]);
 
