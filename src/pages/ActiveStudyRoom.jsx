@@ -222,26 +222,13 @@ const ActiveStudyRoom = () => {
 
         function handleIncomingSignal(from, signal, currentStream) {
             const existingPeer = peersRef.current.find(p => p.peerID === from);
-            const mySocketId = socketRef.current?.id;
 
             if (signal.type === 'offer') {
-                // Deterministic glare handling: smaller socketId is initiator.
-                // If we are initiator for this pair, ignore unexpected incoming offers.
-                if (mySocketId && mySocketId < from) {
-                    console.warn(`[WebRTC] Ignoring unexpected offer from ${from}; this client is designated initiator`);
-                    return;
-                }
-
-                // If a peer already exists, prefer reusing it to avoid tearing down active connections.
+                // If a live peer already exists for this socket, treat repeated offers as duplicates
+                // to avoid tearing down a working connection during participant list churn.
                 if (existingPeer && !existingPeer.peer.destroyed) {
-                    try {
-                        existingPeer.peer.signal(signal);
-                        setTimeout(() => flushIceCandidates(from), 100);
-                        return;
-                    } catch (e) {
-                        console.warn(`[WebRTC] Existing peer could not accept offer from ${from}, recreating peer:`, e.message);
-                        existingPeer.peer.destroy();
-                    }
+                    console.log(`[WebRTC] Duplicate offer from ${from}; existing peer already active, ignoring`);
+                    return;
                 }
 
                 peersRef.current = peersRef.current.filter(p => p.peerID !== from);
