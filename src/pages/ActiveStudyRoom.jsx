@@ -123,22 +123,9 @@ const ActiveStudyRoom = () => {
                 removePeer(peerID);
             }
             if (iceState === 'disconnected') {
-                // Brief disconnects happen — wait 5s before removing
-                console.warn(`[WebRTC] ICE disconnected for ${peerID}, waiting 5s...`);
-                setTimeout(() => {
-                    const p = peersRef.current.find(x => x.peerID === peerID);
-                    if (p && !p.peer.destroyed) {
-                        try {
-                            const currentState = p.peer._pc?.iceConnectionState;
-                            if (currentState === 'disconnected' || currentState === 'failed') {
-                                console.warn(`[WebRTC] ICE still ${currentState} for ${peerID} after 5s, removing`);
-                                removePeer(peerID);
-                            }
-                        } catch (e) {
-                            // peer was already destroyed
-                        }
-                    }
-                }, 5000);
+                // 'disconnected' is often transient on mobile networks.
+                // Keep the peer and let ICE recover to avoid unnecessary video drops.
+                console.warn(`[WebRTC] ICE disconnected for ${peerID}, keeping peer alive for recovery`);
             }
         });
     }
@@ -235,12 +222,28 @@ const ActiveStudyRoom = () => {
 
         function handleIncomingSignal(from, signal, currentStream) {
             const existingPeer = peersRef.current.find(p => p.peerID === from);
+            const mySocketId = socketRef.current?.id;
 
             if (signal.type === 'offer') {
-                // New offer: destroy old peer if any, create a non-initiator peer
-                if (existingPeer && !existingPeer.peer.destroyed) {
-                    existingPeer.peer.destroy();
+                // Deterministic glare handling: smaller socketId is initiator.
+                // If we are initiator for this pair, ignore unexpected incoming offers.
+                if (mySocketId && mySocketId < from) {
+                    console.warn(`[WebRTC] Ignoring unexpected offer from ${from}; this client is designated initiator`);
+                    return;
                 }
+
+                // If a peer already exists, prefer reusing it to avoid tearing down active connections.
+                if (existingPeer && !existingPeer.peer.destroyed) {
+                    try {
+                        existingPeer.peer.signal(signal);
+                        setTimeout(() => flushIceCandidates(from), 100);
+                        return;
+                    } catch (e) {
+                        console.warn(`[WebRTC] Existing peer could not accept offer from ${from}, recreating peer:`, e.message);
+                        existingPeer.peer.destroy();
+                    }
+                }
+
                 peersRef.current = peersRef.current.filter(p => p.peerID !== from);
                 // Clear any stale ICE queue for this peer
                 iceCandidateQueues.current[from] = [];
