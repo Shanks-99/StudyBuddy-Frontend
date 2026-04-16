@@ -110,6 +110,22 @@ const ActiveStudyRoom = () => {
         setPeers([...peersRef.current]);
     }
 
+    // Helper: ensure there is only one peer object per remote socket ID
+    function upsertPeer(peerID, peer) {
+        const existing = peersRef.current.find(p => p.peerID === peerID);
+        if (existing && existing.peer !== peer && !existing.peer.destroyed) {
+            existing.peer.destroy();
+        }
+        peersRef.current = peersRef.current.filter(p => p.peerID !== peerID);
+        peersRef.current.push({ peerID, peer });
+        setPeers([...peersRef.current]);
+    }
+
+    function hasActivePeer(peerID) {
+        const existing = peersRef.current.find(p => p.peerID === peerID);
+        return !!(existing && existing.peer && !existing.peer.destroyed);
+    }
+
     // Helper: attach iceStateChange monitoring to detect dead connections
     function monitorIceState(peer, peerID) {
         peer.on('iceStateChange', (iceState) => {
@@ -182,14 +198,13 @@ const ActiveStudyRoom = () => {
             // BACKFILL: connect to missing participants (only if stream is ready)
             if (streamRef.current) {
                 users.forEach(otherUser => {
-                    const alreadyConnected = peersRef.current.some(p => p.peerID === otherUser.socketId);
+                    const alreadyConnected = hasActivePeer(otherUser.socketId);
                     if (!alreadyConnected && otherUser.socketId !== socketRef.current.id) {
                         // Only initiate if our socket ID is lexicographically smaller
                         if (socketRef.current.id < otherUser.socketId) {
                             console.log(`[WebRTC] Backfill: Initiating peer to ${otherUser.socketId}`);
                             const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
-                            peersRef.current.push({ peerID: otherUser.socketId, peer });
-                            setPeers([...peersRef.current]);
+                            upsertPeer(otherUser.socketId, peer);
                         }
                     }
                 });
@@ -224,11 +239,16 @@ const ActiveStudyRoom = () => {
             const existingPeer = peersRef.current.find(p => p.peerID === from);
 
             if (signal.type === 'offer') {
-                // If a live peer already exists for this socket, treat repeated offers as duplicates
-                // to avoid tearing down a working connection during participant list churn.
+                // If peer exists, this can be a valid renegotiation offer.
                 if (existingPeer && !existingPeer.peer.destroyed) {
-                    console.log(`[WebRTC] Duplicate offer from ${from}; existing peer already active, ignoring`);
-                    return;
+                    try {
+                        existingPeer.peer.signal(signal);
+                        setTimeout(() => flushIceCandidates(from), 100);
+                        return;
+                    } catch (e) {
+                        console.warn(`[WebRTC] Failed to apply offer on existing peer ${from}, recreating peer:`, e.message);
+                        removePeer(from);
+                    }
                 }
 
                 peersRef.current = peersRef.current.filter(p => p.peerID !== from);
@@ -240,8 +260,7 @@ const ActiveStudyRoom = () => {
 
                 console.log(`[WebRTC] Creating answer peer for offer from ${from}`);
                 const peer = addPeer(signal, from, currentStream);
-                peersRef.current.push({ peerID: from, peer });
-                setPeers([...peersRef.current]);
+                upsertPeer(from, peer);
             } else if (signal.type === 'answer') {
                 // Answer — forward to existing peer, then flush ICE queue
                 if (existingPeer && !existingPeer.peer.destroyed) {
@@ -393,9 +412,7 @@ const ActiveStudyRoom = () => {
             console.error(`[WebRTC] Peer error (initiator -> ${userToSignal}):`, err.message);
             if (err.message?.includes('User-Initiated Abort') || err.message?.includes('Ice connection failed')) {
                 // Remove the broken peer so user can reconnect
-                peersRef.current = peersRef.current.filter(p => p.peerID !== userToSignal);
-                delete iceCandidateQueues.current[userToSignal];
-                setPeers([...peersRef.current]);
+                removePeer(userToSignal);
             }
         });
 
@@ -429,9 +446,7 @@ const ActiveStudyRoom = () => {
         peer.on("error", err => {
             console.error(`[WebRTC] Peer error (responder -> ${callerID}):`, err.message);
             if (err.message?.includes('User-Initiated Abort') || err.message?.includes('Ice connection failed')) {
-                peersRef.current = peersRef.current.filter(p => p.peerID !== callerID);
-                delete iceCandidateQueues.current[callerID];
-                setPeers([...peersRef.current]);
+                removePeer(callerID);
             }
         });
 
