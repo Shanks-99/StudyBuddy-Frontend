@@ -232,8 +232,11 @@ const ActiveStudyRoom = () => {
                 }
 
                 peersRef.current = peersRef.current.filter(p => p.peerID !== from);
-                // Clear any stale ICE queue for this peer
-                iceCandidateQueues.current[from] = [];
+                // Keep already queued ICE candidates that may have arrived before this offer.
+                // Clearing here can break handshakes under multi-user join races.
+                if (!iceCandidateQueues.current[from]) {
+                    iceCandidateQueues.current[from] = [];
+                }
 
                 console.log(`[WebRTC] Creating answer peer for offer from ${from}`);
                 const peer = addPeer(signal, from, currentStream);
