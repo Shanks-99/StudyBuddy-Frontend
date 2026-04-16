@@ -746,59 +746,47 @@ const ActiveStudyRoom = () => {
 const VideoPeer = ({ peer, name }) => {
     const ref = useRef();
     const [hasStream, setHasStream] = useState(false);
+    const attachedStreamIdRef = useRef(null);
 
     useEffect(() => {
         if (!peer || peer.destroyed) return;
 
         let retryTimer = null;
 
-        function attachStream(stream) {
-            if (ref.current && stream) {
-                const tracks = stream.getTracks();
-                console.log(`[VideoPeer] Attaching stream for ${name}, tracks: ${tracks.map(t => t.kind + ':' + t.readyState).join(', ')}`);
-                
-                // Only attach if we have live tracks
-                if (tracks.length > 0 && tracks.some(t => t.readyState === 'live')) {
-                    ref.current.srcObject = stream;
-                    setHasStream(true);
-                    // Force play in case autoplay is blocked
-                    ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
-                    // Clear retry since we have a valid stream
-                    if (retryTimer) { clearInterval(retryTimer); retryTimer = null; }
-                }
+        function attachRemoteStream(stream) {
+            if (!ref.current || !stream) return;
+
+            const tracks = stream.getTracks();
+            const hasLiveTrack = tracks.some(t => t.readyState === 'live');
+            if (!hasLiveTrack) return;
+
+            // Guard against rebinding same stream repeatedly due to multiple events.
+            if (attachedStreamIdRef.current === stream.id) return;
+
+            console.log(`[VideoPeer] Attaching REMOTE stream for ${name}, streamId=${stream.id}, tracks=${tracks.map(t => t.kind + ':' + t.readyState).join(', ')}`);
+            ref.current.srcObject = stream;
+            attachedStreamIdRef.current = stream.id;
+            setHasStream(true);
+            ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
+
+            if (retryTimer) {
+                clearInterval(retryTimer);
+                retryTimer = null;
             }
         }
 
-        // Check all possible places where the stream may already exist
-        function tryAttachExisting() {
-            const existingStream = peer.streams?.[0] 
-                || peer._remoteStreams?.[0]
-                || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
-            
-            if (existingStream && existingStream.getTracks().length > 0) {
-                attachStream(existingStream);
+        function tryAttachExistingRemote() {
+            // IMPORTANT: Do NOT use peer.streams here.
+            // In simple-peer this can contain local outbound streams, which causes self-video duplication.
+            const existingRemote = peer._remoteStreams?.[0] || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
+            if (existingRemote) {
+                attachRemoteStream(existingRemote);
                 return true;
-            }
-
-            // Also check via getReceivers on the underlying RTCPeerConnection
-            if (peer._pc && peer._pc.getReceivers) {
-                const receivers = peer._pc.getReceivers();
-                if (receivers.length > 0) {
-                    const tracks = receivers.map(r => r.track).filter(Boolean);
-                    if (tracks.length > 0) {
-                        const reconstructedStream = new MediaStream(tracks);
-                        attachStream(reconstructedStream);
-                        return true;
-                    }
-                }
             }
             return false;
         }
 
-        // Try immediately
-        const attached = tryAttachExisting();
-
-        // If not attached yet, retry periodically (some peers take time)
+        const attached = tryAttachExistingRemote();
         if (!attached) {
             retryTimer = setInterval(() => {
                 if (peer.destroyed) {
@@ -806,17 +794,15 @@ const VideoPeer = ({ peer, name }) => {
                     retryTimer = null;
                     return;
                 }
-                const success = tryAttachExisting();
-                if (success) {
-                    clearInterval(retryTimer);
-                    retryTimer = null;
-                }
-            }, 1000);
+                tryAttachExistingRemote();
+            }, 700);
         }
 
         // Listen for future stream arrivals
-        const onStream = (stream) => attachStream(stream);
-        const onTrack = (track, stream) => attachStream(stream);
+        const onStream = (stream) => attachRemoteStream(stream);
+        const onTrack = (_track, stream) => {
+            if (stream) attachRemoteStream(stream);
+        };
 
         peer.on("stream", onStream);
         peer.on("track", onTrack);
@@ -824,10 +810,7 @@ const VideoPeer = ({ peer, name }) => {
         // Also listen on the underlying RTCPeerConnection for ontrack
         const pcOnTrack = (event) => {
             if (event.streams && event.streams[0]) {
-                attachStream(event.streams[0]);
-            } else if (event.track) {
-                const reconstructedStream = new MediaStream([event.track]);
-                attachStream(reconstructedStream);
+                attachRemoteStream(event.streams[0]);
             }
         };
         if (peer._pc) {
@@ -842,6 +825,7 @@ const VideoPeer = ({ peer, name }) => {
             if (peer._pc) {
                 peer._pc.removeEventListener('track', pcOnTrack);
             }
+            attachedStreamIdRef.current = null;
         };
     }, [peer, name]);
 
