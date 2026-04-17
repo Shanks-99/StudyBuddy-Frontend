@@ -152,8 +152,26 @@ const ActiveStudyRoom = () => {
 
         socketRef.current = io(SOCKET_SERVER_URL);
         const streamRef = { current: null };
+        const latestUsersRef = { current: [] };
         // Queue signals that arrive before our stream is ready
         const pendingSignals = [];
+
+        function reconcilePeers(users, currentStream) {
+            if (!currentStream || !socketRef.current?.id || !Array.isArray(users)) return;
+
+            const mySocketId = socketRef.current.id;
+            users.forEach(otherUser => {
+                const otherSocketId = otherUser.socketId;
+                if (!otherSocketId || otherSocketId === mySocketId) return;
+
+                const alreadyConnected = hasActivePeer(otherSocketId);
+                if (!alreadyConnected && mySocketId < otherSocketId) {
+                    console.log(`[WebRTC] Reconcile: Initiating missing peer to ${otherSocketId}`);
+                    const peer = createPeer(otherSocketId, mySocketId, currentStream);
+                    upsertPeer(otherSocketId, peer);
+                }
+            });
+        }
 
         // --- Persistent Listeners (Chat & Room) ---
         socketRef.current.on("receive-message", (message) => {
@@ -181,6 +199,7 @@ const ActiveStudyRoom = () => {
         });
 
         socketRef.current.on("room-users", (users) => {
+            latestUsersRef.current = users;
             setParticipants(users);
             const currentSocketIds = users.map(u => u.socketId);
             
@@ -197,17 +216,7 @@ const ActiveStudyRoom = () => {
 
             // BACKFILL: connect to missing participants (only if stream is ready)
             if (streamRef.current) {
-                users.forEach(otherUser => {
-                    const alreadyConnected = hasActivePeer(otherUser.socketId);
-                    if (!alreadyConnected && otherUser.socketId !== socketRef.current.id) {
-                        // Only initiate if our socket ID is lexicographically smaller
-                        if (socketRef.current.id < otherUser.socketId) {
-                            console.log(`[WebRTC] Backfill: Initiating peer to ${otherUser.socketId}`);
-                            const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
-                            upsertPeer(otherUser.socketId, peer);
-                        }
-                    }
-                });
+                reconcilePeers(users, streamRef.current);
             }
         });
 
@@ -314,7 +323,14 @@ const ActiveStudyRoom = () => {
                 pendingSignals.forEach(p => handleIncomingSignal(p.from, p.signal, streamRef.current));
                 pendingSignals.length = 0;
             }
+
+            // Immediately reconcile after join in case room-users arrived before media was ready.
+            reconcilePeers(latestUsersRef.current, streamRef.current);
         }
+
+        const reconcileInterval = setInterval(() => {
+            reconcilePeers(latestUsersRef.current, streamRef.current);
+        }, 2500);
 
         if (!navigator.mediaDevices) {
             joinRoomAndProcessQueue();
@@ -347,6 +363,7 @@ const ActiveStudyRoom = () => {
             peersRef.current.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
             peersRef.current = [];
             iceCandidateQueues.current = {};
+            clearInterval(reconcileInterval);
         };
     }, [roomId]);
 
