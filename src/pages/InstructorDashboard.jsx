@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout } from '../services/authService';
 import {
     Users,
@@ -22,14 +22,31 @@ import {
     Trash2,
     Edit,
     Search,
-    Bell
+    Bell,
+    UserCircle2,
+    X
 } from 'lucide-react';
 import InstructorSidebar from '../components/InstructorSidebar';
+import {
+    getInstructorMentorProfile,
+    isInstructorMentorProfileComplete,
+    saveInstructorMentorProfile,
+} from '../services/instructorMentorProfileService';
 
 const InstructorDashboard = () => {
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState('dashboard');
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [profileStatus, setProfileStatus] = useState('missing');
+    const [profileForm, setProfileForm] = useState({
+        name: '',
+        email: '',
+        specializedCourses: '',
+        description: '',
+        degreeFiles: [],
+    });
     const navigate = useNavigate();
+    const location = useLocation();
 
     useEffect(() => {
         const currentUser = getCurrentUser();
@@ -39,8 +56,89 @@ const InstructorDashboard = () => {
             navigate('/student-dashboard');
         } else {
             setUser(currentUser);
+            const existingProfile = getInstructorMentorProfile();
+
+            if (existingProfile) {
+                setProfileForm({
+                    name: existingProfile.name || currentUser.name || '',
+                    email: existingProfile.email || '',
+                    specializedCourses: existingProfile.specializedCourses || '',
+                    description: existingProfile.description || '',
+                    degreeFiles: Array.isArray(existingProfile.degreeFiles) ? existingProfile.degreeFiles : [],
+                });
+                setProfileStatus(existingProfile.status || 'pending');
+            } else {
+                setProfileForm((prev) => ({
+                    ...prev,
+                    name: currentUser.name || '',
+                }));
+                setProfileStatus('missing');
+            }
         }
     }, [navigate]);
+
+    useEffect(() => {
+        const searchParams = new URLSearchParams(location.search);
+        if (searchParams.get('completeProfile') === '1') {
+            setShowProfileModal(true);
+        }
+    }, [location.search]);
+
+    useEffect(() => {
+        if (!showProfileModal) return undefined;
+
+        const previousBodyOverflow = document.body.style.overflow;
+        const previousHtmlOverflow = document.documentElement.style.overflow;
+
+        document.body.style.overflow = 'hidden';
+        document.documentElement.style.overflow = 'hidden';
+
+        return () => {
+            document.body.style.overflow = previousBodyOverflow;
+            document.documentElement.style.overflow = previousHtmlOverflow;
+        };
+    }, [showProfileModal]);
+
+    const handleProfileInputChange = (event) => {
+        const { name, value } = event.target;
+        setProfileForm((prev) => ({ ...prev, [name]: value }));
+    };
+
+    const handleDegreeFilesChange = (event) => {
+        const files = Array.from(event.target.files || []);
+        const validFiles = files.filter((file) => ['image/png', 'image/jpeg'].includes(file.type));
+
+        if (validFiles.length !== files.length) {
+            alert('Only PNG or JPG files are allowed for degree attachments.');
+        }
+
+        setProfileForm((prev) => ({
+            ...prev,
+            degreeFiles: validFiles.map((file) => file.name),
+        }));
+    };
+
+    const handleProfileSubmit = (event) => {
+        event.preventDefault();
+
+        const payload = {
+            ...profileForm,
+            name: profileForm.name.trim(),
+            email: profileForm.email.trim(),
+            specializedCourses: profileForm.specializedCourses.trim(),
+            description: profileForm.description.trim(),
+        };
+
+        if (!isInstructorMentorProfileComplete(payload)) {
+            alert('Please complete all fields and attach at least one PNG/JPG degree image.');
+            return;
+        }
+
+        const saved = saveInstructorMentorProfile(payload);
+        setProfileStatus(saved.status);
+        setShowProfileModal(false);
+        alert('Profile saved successfully.');
+    };
 
     if (!user) return null;
 
@@ -111,6 +209,14 @@ const InstructorDashboard = () => {
                             <button className="relative p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all">
                                 <Bell className="w-6 h-6 text-white" />
                                 <span className="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-900"></span>
+                            </button>
+                            {/* Mentor Profile */}
+                            <button
+                                onClick={() => setShowProfileModal(true)}
+                                className="relative p-2 bg-white/10 rounded-xl hover:bg-white/20 transition-all"
+                                title="Complete Mentor Profile"
+                            >
+                                <UserCircle2 className="w-6 h-6 text-white" />
                             </button>
                         </div>
                     </div>
@@ -315,6 +421,112 @@ const InstructorDashboard = () => {
                     </div>
                 </div>
             </div >
+
+            {showProfileModal && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm p-4 overscroll-contain"
+                    onWheel={(e) => e.stopPropagation()}
+                    onTouchMove={(e) => e.stopPropagation()}
+                >
+                    <div className="max-w-2xl mx-auto bg-gray-900 border border-white/15 rounded-2xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col">
+                        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                            <h3 className="text-xl font-bold text-white">Mentor Profile Setup</h3>
+                            <button
+                                onClick={() => setShowProfileModal(false)}
+                                className="p-1.5 rounded-lg hover:bg-white/10 text-gray-300"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleProfileSubmit} className="p-6 space-y-4 overflow-y-auto">
+                            <div>
+                                <label className="text-sm text-gray-300 block mb-1.5">Name</label>
+                                <input
+                                    name="name"
+                                    value={profileForm.name}
+                                    onChange={handleProfileInputChange}
+                                    className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-sm text-gray-300 block mb-1.5">Email</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value={profileForm.email}
+                                    onChange={handleProfileInputChange}
+                                    className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-sm text-gray-300 block mb-1.5">Specialized Courses</label>
+                                <input
+                                    name="specializedCourses"
+                                    value={profileForm.specializedCourses}
+                                    onChange={handleProfileInputChange}
+                                    placeholder="Example: Calculus, Data Structures, Operating Systems"
+                                    className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-sm text-gray-300 block mb-1.5">Description</label>
+                                <textarea
+                                    name="description"
+                                    value={profileForm.description}
+                                    onChange={handleProfileInputChange}
+                                    rows="4"
+                                    className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="text-sm text-gray-300 block mb-1.5">Attach Degree Files (PNG/JPG)</label>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/png,image/jpeg"
+                                    onChange={handleDegreeFilesChange}
+                                    className="w-full rounded-xl bg-white/10 border border-white/15 px-4 py-2.5 text-gray-200"
+                                    required={profileForm.degreeFiles.length === 0}
+                                />
+                                {profileForm.degreeFiles.length > 0 && (
+                                    <div className="mt-2 text-xs text-gray-400">
+                                        Attached: {profileForm.degreeFiles.join(', ')}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="rounded-xl bg-amber-500/15 border border-amber-400/30 p-3 text-amber-100 text-sm">
+                                Approval checks are disabled for testing right now. You can continue using mentorship features.
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowProfileModal(false)}
+                                    className="px-4 py-2 rounded-xl border border-white/20 text-gray-300 hover:bg-white/10"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-5 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700"
+                                >
+                                    Submit for Approval
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

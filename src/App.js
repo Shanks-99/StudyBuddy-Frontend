@@ -11,6 +11,9 @@ import QuizGenerator from './pages/QuizGenerator';
 import FocusRoom from './pages/FocusRoom';
 import StudyRoomList from './pages/StudyRoomList';
 import ActiveStudyRoom from './pages/ActiveStudyRoom';
+import Mentorship from './pages/Mentorship';
+import InstructorMentorship from './pages/InstructorMentorship';
+import MentorshipCall from './pages/MentorshipCall';
 
 function App() {
   return (
@@ -23,6 +26,9 @@ function App() {
         <Route path="/content-generator" element={<ContentGenerator />} />
         <Route path="/quiz-generator" element={<QuizGenerator />} />
         <Route path="/focusrooms" element={<FocusRoom />} />
+        <Route path="/mentorship" element={<Mentorship />} />
+        <Route path="/instructor-mentorship" element={<InstructorMentorship />} />
+        <Route path="/mentorship-call/:callId" element={<MentorshipCall />} />
         <Route path="/studyroom" element={<StudyRoomList />} />
         <Route path="/studyroom/:roomId" element={<ActiveStudyRoom />} />
         <Route path="/" element={<Navigate to="/login" replace />} />

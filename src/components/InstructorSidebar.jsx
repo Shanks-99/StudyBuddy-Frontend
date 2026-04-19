@@ -4,14 +4,12 @@ import { logout } from '../services/authService';
 import {
     LayoutDashboard,
     Users,
-    Calendar,
-    ClipboardList,
     MessageSquare,
     BookOpen,
     Settings,
     LogOut,
-    CalendarClock,
     FileText,
+    Sparkles,
     ChevronLeft,
     ChevronRight
 } from 'lucide-react';
@@ -24,11 +22,9 @@ const InstructorSidebar = ({ activeTab, onTabChange }) => {
         { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
         { id: 'students', icon: Users, label: 'My Students' },
         { id: 'quiz-generator', icon: FileText, label: 'Quiz Generator', route: '/quiz-generator' },
-        { id: 'sessions', icon: Calendar, label: 'Sessions' },
-        { id: 'requests', icon: ClipboardList, label: 'Requests' },
+        { id: 'mentorship', icon: Sparkles, label: 'Mentorship', route: '/instructor-mentorship' },
         { id: 'community', icon: MessageSquare, label: 'Community' },
         { id: 'resources', icon: BookOpen, label: 'Resource Hub' },
-        { id: 'availability', icon: CalendarClock, label: 'Availability' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];
 
