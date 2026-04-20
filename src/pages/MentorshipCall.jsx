@@ -74,6 +74,16 @@ const MentorshipCall = () => {
 
     const otherParticipant = participants.find((item) => item.socketId !== socketRef.current?.id);
 
+    useEffect(() => {
+        if (!localVideoRef.current || !streamRef.current) return;
+
+        if (localVideoRef.current.srcObject !== streamRef.current) {
+            localVideoRef.current.srcObject = streamRef.current;
+        }
+
+        localVideoRef.current.play().catch(() => {});
+    }, [isLoading, hasLocalStream]);
+
     const cleanupPeer = () => {
         if (peerRef.current && !peerRef.current.destroyed) {
             peerRef.current.destroy();
