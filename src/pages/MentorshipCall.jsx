@@ -56,6 +56,7 @@ const MentorshipCall = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isAudioMuted, setIsAudioMuted] = useState(false);
     const [isVideoMuted, setIsVideoMuted] = useState(false);
+    const [hasRemoteStream, setHasRemoteStream] = useState(false);
 
     const socketRef = useRef(null);
     const localVideoRef = useRef(null);
@@ -63,6 +64,9 @@ const MentorshipCall = () => {
     const peerRef = useRef(null);
     const streamRef = useRef(null);
     const pendingSignalsRef = useRef([]);
+    const queuedIceSignalsRef = useRef({});
+    const remoteSocketIdRef = useRef(null);
+    const remoteStreamIdRef = useRef(null);
 
     const otherParticipant = participants.find((item) => item.socketId !== socketRef.current?.id);
 
@@ -71,6 +75,129 @@ const MentorshipCall = () => {
             peerRef.current.destroy();
         }
         peerRef.current = null;
+        remoteSocketIdRef.current = null;
+        queuedIceSignalsRef.current = {};
+        remoteStreamIdRef.current = null;
+        setHasRemoteStream(false);
+        if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = null;
+        }
+    };
+
+    const attachRemoteStream = (remoteStream) => {
+        if (!remoteVideoRef.current || !remoteStream) return;
+        if (remoteStreamIdRef.current === remoteStream.id) return;
+
+        remoteVideoRef.current.srcObject = remoteStream;
+        remoteStreamIdRef.current = remoteStream.id;
+        setHasRemoteStream(true);
+        remoteVideoRef.current.play().catch(() => {});
+    };
+
+    const queueIceSignal = (remoteSocketId, signal) => {
+        if (!remoteSocketId || !signal || signal.type) return;
+
+        if (!queuedIceSignalsRef.current[remoteSocketId]) {
+            queuedIceSignalsRef.current[remoteSocketId] = [];
+        }
+        queuedIceSignalsRef.current[remoteSocketId].push(signal);
+    };
+
+    const flushQueuedIceSignals = (remoteSocketId) => {
+        if (!remoteSocketId || !peerRef.current || peerRef.current.destroyed) return;
+
+        const queue = queuedIceSignalsRef.current[remoteSocketId];
+        if (!Array.isArray(queue) || queue.length === 0) return;
+
+        const peerConnection = peerRef.current._pc;
+        const hasRemoteDescription = Boolean(peerConnection?.remoteDescription?.type);
+        if (!hasRemoteDescription) return;
+
+        const remaining = [];
+        queue.forEach((iceSignal) => {
+            try {
+                peerRef.current.signal(iceSignal);
+            } catch (error) {
+                remaining.push(iceSignal);
+            }
+        });
+
+        queuedIceSignalsRef.current[remoteSocketId] = remaining;
+    };
+
+    const signalPeerSafely = (remoteSocketId, signal) => {
+        if (!peerRef.current || peerRef.current.destroyed || !signal) return false;
+
+        const isIceSignal = !signal.type;
+        if (isIceSignal) {
+            const peerConnection = peerRef.current._pc;
+            const hasRemoteDescription = Boolean(peerConnection?.remoteDescription?.type);
+            if (!hasRemoteDescription) {
+                queueIceSignal(remoteSocketId, signal);
+                return false;
+            }
+        }
+
+        try {
+            peerRef.current.signal(signal);
+
+            if (signal.type === 'answer' || signal.type === 'offer') {
+                setTimeout(() => flushQueuedIceSignals(remoteSocketId), 100);
+            }
+
+            return true;
+        } catch (error) {
+            if (isIceSignal) {
+                queueIceSignal(remoteSocketId, signal);
+            } else {
+                pendingSignalsRef.current.push({ from: remoteSocketId, signal });
+            }
+            return false;
+        }
+    };
+
+    const flushPendingSignals = (remoteSocketId) => {
+        if (!remoteSocketId) return;
+
+        const remaining = [];
+        pendingSignalsRef.current.forEach((item) => {
+            if (item.from !== remoteSocketId) {
+                remaining.push(item);
+                return;
+            }
+
+            const applied = signalPeerSafely(remoteSocketId, item.signal);
+            if (!applied && item.signal?.type) {
+                remaining.push(item);
+            }
+        });
+
+        pendingSignalsRef.current = remaining;
+    };
+
+    const registerPeerHandlers = (peer, remoteSocketId) => {
+        peer.on('signal', (signal) => {
+            socketRef.current?.emit('webrtc-signal', { signal, to: remoteSocketId });
+        });
+
+        peer.on('stream', (remoteStream) => {
+            attachRemoteStream(remoteStream);
+        });
+
+        peer.on('track', (_track, remoteStream) => {
+            if (remoteStream) {
+                attachRemoteStream(remoteStream);
+            }
+        });
+
+        peer.on('connect', () => {
+            flushPendingSignals(remoteSocketId);
+            flushQueuedIceSignals(remoteSocketId);
+        });
+
+        peer.on('error', (error) => {
+            console.error('[MentorshipCall] Peer error:', error?.message || error);
+        });
     };
 
     const leaveCall = () => {
@@ -99,19 +226,7 @@ const MentorshipCall = () => {
             config: { iceServers },
         });
 
-        peer.on('signal', (signal) => {
-            socketRef.current?.emit('webrtc-signal', { signal, to: remoteSocketId });
-        });
-
-        peer.on('stream', (remoteStream) => {
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
-            }
-        });
-
-        peer.on('error', () => {
-            cleanupPeer();
-        });
+        registerPeerHandlers(peer, remoteSocketId);
 
         return peer;
     };
@@ -124,40 +239,15 @@ const MentorshipCall = () => {
             config: { iceServers },
         });
 
-        peer.on('signal', (signal) => {
-            socketRef.current?.emit('webrtc-signal', { signal, to: remoteSocketId });
-        });
+        registerPeerHandlers(peer, remoteSocketId);
 
-        peer.on('stream', (remoteStream) => {
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
-            }
-        });
+        try {
+            peer.signal(offerSignal);
+        } catch (error) {
+            pendingSignalsRef.current.push({ from: remoteSocketId, signal: offerSignal });
+        }
 
-        peer.on('error', () => {
-            cleanupPeer();
-        });
-
-        peer.signal(offerSignal);
         return peer;
-    };
-
-    const flushPendingSignals = (remoteSocketId) => {
-        if (!peerRef.current || peerRef.current.destroyed) return;
-
-        const remaining = [];
-        pendingSignalsRef.current.forEach((item) => {
-            if (item.from === remoteSocketId) {
-                try {
-                    peerRef.current.signal(item.signal);
-                } catch (error) {
-                    remaining.push(item);
-                }
-            } else {
-                remaining.push(item);
-            }
-        });
-        pendingSignalsRef.current = remaining;
     };
 
     useEffect(() => {
@@ -199,16 +289,15 @@ const MentorshipCall = () => {
             if (peerRef.current && !peerRef.current.destroyed) return;
 
             if (mySocketId < remoteUser.socketId) {
+                remoteSocketIdRef.current = remoteUser.socketId;
                 peerRef.current = createInitiatorPeer(remoteUser.socketId, streamRef.current);
                 flushPendingSignals(remoteUser.socketId);
+                setTimeout(() => flushQueuedIceSignals(remoteUser.socketId), 100);
             }
         });
 
         socket.on('user-left', () => {
             cleanupPeer();
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = null;
-            }
         });
 
         socket.on('webrtc-signal', ({ from, signal }) => {
@@ -219,8 +308,10 @@ const MentorshipCall = () => {
 
             if (signal.type === 'offer') {
                 cleanupPeer();
+                remoteSocketIdRef.current = from;
                 peerRef.current = createResponderPeer(signal, from, streamRef.current);
                 flushPendingSignals(from);
+                setTimeout(() => flushQueuedIceSignals(from), 100);
                 return;
             }
 
@@ -229,11 +320,17 @@ const MentorshipCall = () => {
                 return;
             }
 
-            try {
-                peerRef.current.signal(signal);
-            } catch (error) {
-                pendingSignalsRef.current.push({ from, signal });
+            if (remoteSocketIdRef.current && remoteSocketIdRef.current !== from) {
+                return;
             }
+
+            if (!remoteSocketIdRef.current) {
+                remoteSocketIdRef.current = from;
+            }
+
+            signalPeerSafely(from, signal);
+            flushPendingSignals(from);
+            flushQueuedIceSignals(from);
         });
 
         startMedia();
@@ -307,6 +404,11 @@ const MentorshipCall = () => {
                     {!otherParticipant && (
                         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300">
                             Waiting for the other participant...
+                        </div>
+                    )}
+                    {otherParticipant && !hasRemoteStream && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300">
+                            Connecting to {otherParticipant.name}'s video...
                         </div>
                     )}
                     <div className="absolute bottom-3 left-3 px-3 py-1 rounded-lg bg-black/60 text-sm">
