@@ -57,6 +57,8 @@ const MentorshipCall = () => {
     const [isAudioMuted, setIsAudioMuted] = useState(false);
     const [isVideoMuted, setIsVideoMuted] = useState(false);
     const [hasRemoteStream, setHasRemoteStream] = useState(false);
+    const [hasLocalStream, setHasLocalStream] = useState(false);
+    const [mediaError, setMediaError] = useState('');
 
     const socketRef = useRef(null);
     const localVideoRef = useRef(null);
@@ -67,6 +69,8 @@ const MentorshipCall = () => {
     const queuedIceSignalsRef = useRef({});
     const remoteSocketIdRef = useRef(null);
     const remoteStreamIdRef = useRef(null);
+    const remoteFallbackStreamRef = useRef(new MediaStream());
+    const remoteAttachIntervalRef = useRef(null);
 
     const otherParticipant = participants.find((item) => item.socketId !== socketRef.current?.id);
 
@@ -75,9 +79,14 @@ const MentorshipCall = () => {
             peerRef.current.destroy();
         }
         peerRef.current = null;
+        if (remoteAttachIntervalRef.current) {
+            clearInterval(remoteAttachIntervalRef.current);
+            remoteAttachIntervalRef.current = null;
+        }
         remoteSocketIdRef.current = null;
         queuedIceSignalsRef.current = {};
         remoteStreamIdRef.current = null;
+        remoteFallbackStreamRef.current = new MediaStream();
         setHasRemoteStream(false);
         if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = null;
@@ -92,6 +101,30 @@ const MentorshipCall = () => {
         remoteStreamIdRef.current = remoteStream.id;
         setHasRemoteStream(true);
         remoteVideoRef.current.play().catch(() => {});
+    };
+
+    const startRemoteAttachWatcher = (remoteSocketId) => {
+        if (remoteAttachIntervalRef.current) {
+            clearInterval(remoteAttachIntervalRef.current);
+            remoteAttachIntervalRef.current = null;
+        }
+
+        remoteAttachIntervalRef.current = setInterval(() => {
+            if (!peerRef.current || peerRef.current.destroyed) {
+                return;
+            }
+
+            if (remoteSocketIdRef.current && remoteSocketIdRef.current !== remoteSocketId) {
+                return;
+            }
+
+            const peer = peerRef.current;
+            const existingRemote = peer._remoteStreams?.[0] || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
+
+            if (existingRemote) {
+                attachRemoteStream(existingRemote);
+            }
+        }, 700);
     };
 
     const queueIceSignal = (remoteSocketId, signal) => {
@@ -187,8 +220,39 @@ const MentorshipCall = () => {
         peer.on('track', (_track, remoteStream) => {
             if (remoteStream) {
                 attachRemoteStream(remoteStream);
+                return;
+            }
+
+            if (_track) {
+                const existingTrack = remoteFallbackStreamRef.current
+                    .getTracks()
+                    .find((track) => track.id === _track.id);
+
+                if (!existingTrack) {
+                    remoteFallbackStreamRef.current.addTrack(_track);
+                }
+                attachRemoteStream(remoteFallbackStreamRef.current);
             }
         });
+
+        if (peer._pc) {
+            peer._pc.addEventListener('track', (event) => {
+                if (event.streams && event.streams[0]) {
+                    attachRemoteStream(event.streams[0]);
+                    return;
+                }
+
+                if (event.track) {
+                    const exists = remoteFallbackStreamRef.current
+                        .getTracks()
+                        .find((track) => track.id === event.track.id);
+                    if (!exists) {
+                        remoteFallbackStreamRef.current.addTrack(event.track);
+                    }
+                    attachRemoteStream(remoteFallbackStreamRef.current);
+                }
+            });
+        }
 
         peer.on('connect', () => {
             flushPendingSignals(remoteSocketId);
@@ -198,6 +262,8 @@ const MentorshipCall = () => {
         peer.on('error', (error) => {
             console.error('[MentorshipCall] Peer error:', error?.message || error);
         });
+
+        startRemoteAttachWatcher(remoteSocketId);
     };
 
     const leaveCall = () => {
@@ -206,6 +272,7 @@ const MentorshipCall = () => {
             streamRef.current.getTracks().forEach((track) => track.stop());
             streamRef.current = null;
         }
+        setHasLocalStream(false);
         if (socketRef.current) {
             socketRef.current.disconnect();
             socketRef.current = null;
@@ -222,8 +289,12 @@ const MentorshipCall = () => {
         const peer = new Peer({
             initiator: true,
             trickle: true,
-            stream,
+            stream: stream || undefined,
             config: { iceServers },
+            offerOptions: {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+            },
         });
 
         registerPeerHandlers(peer, remoteSocketId);
@@ -235,8 +306,12 @@ const MentorshipCall = () => {
         const peer = new Peer({
             initiator: false,
             trickle: true,
-            stream,
+            stream: stream || undefined,
             config: { iceServers },
+            offerOptions: {
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+            },
         });
 
         registerPeerHandlers(peer, remoteSocketId);
@@ -248,6 +323,39 @@ const MentorshipCall = () => {
         }
 
         return peer;
+    };
+
+    const requestLocalMedia = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            streamRef.current = stream;
+            setHasLocalStream(true);
+            setMediaError('');
+
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+            }
+
+            if (peerRef.current && !peerRef.current.destroyed) {
+                const existingSenders = peerRef.current._pc?.getSenders?.() || [];
+                const existingTrackIds = new Set(existingSenders.map((sender) => sender.track?.id).filter(Boolean));
+
+                stream.getTracks().forEach((track) => {
+                    if (existingTrackIds.has(track.id)) return;
+                    try {
+                        peerRef.current.addTrack(track, stream);
+                    } catch (error) {
+                        // Ignore addTrack errors for already-negotiated tracks
+                    }
+                });
+            }
+
+            return true;
+        } catch (error) {
+            setHasLocalStream(false);
+            setMediaError('Camera or microphone permission is blocked/unavailable. Click Retry Camera after allowing access.');
+            return false;
+        }
     };
 
     useEffect(() => {
@@ -267,16 +375,8 @@ const MentorshipCall = () => {
         };
 
         const startMedia = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                streamRef.current = stream;
-                if (localVideoRef.current) {
-                    localVideoRef.current.srcObject = stream;
-                }
-                joinRoom();
-            } catch (error) {
-                joinRoom();
-            }
+            await requestLocalMedia();
+            joinRoom();
         };
 
         socket.on('room-users', (users) => {
@@ -285,7 +385,7 @@ const MentorshipCall = () => {
             const remoteUsers = users.filter((item) => item.socketId !== mySocketId);
             const remoteUser = remoteUsers[0];
 
-            if (!remoteUser || !streamRef.current || !mySocketId) return;
+            if (!remoteUser || !mySocketId) return;
             if (peerRef.current && !peerRef.current.destroyed) return;
 
             if (mySocketId < remoteUser.socketId) {
@@ -301,12 +401,18 @@ const MentorshipCall = () => {
         });
 
         socket.on('webrtc-signal', ({ from, signal }) => {
-            if (!streamRef.current) {
-                pendingSignalsRef.current.push({ from, signal });
-                return;
-            }
-
             if (signal.type === 'offer') {
+                if (
+                    peerRef.current &&
+                    !peerRef.current.destroyed &&
+                    remoteSocketIdRef.current === from
+                ) {
+                    signalPeerSafely(from, signal);
+                    flushPendingSignals(from);
+                    setTimeout(() => flushQueuedIceSignals(from), 100);
+                    return;
+                }
+
                 cleanupPeer();
                 remoteSocketIdRef.current = from;
                 peerRef.current = createResponderPeer(signal, from, streamRef.current);
@@ -341,6 +447,7 @@ const MentorshipCall = () => {
                 streamRef.current.getTracks().forEach((track) => track.stop());
                 streamRef.current = null;
             }
+            setHasLocalStream(false);
             socket.off('room-users');
             socket.off('user-left');
             socket.off('webrtc-signal');
@@ -389,6 +496,19 @@ const MentorshipCall = () => {
             <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gray-900">
                     <video ref={localVideoRef} muted autoPlay playsInline className="w-full h-full object-cover" />
+                    {!hasLocalStream && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900 text-gray-300 px-4 text-center">
+                            <div>Camera preview unavailable</div>
+                            {mediaError && (
+                                <button
+                                    onClick={requestLocalMedia}
+                                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 text-sm"
+                                >
+                                    Retry Camera
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {isVideoMuted && (
                         <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300">
                             Camera is off
