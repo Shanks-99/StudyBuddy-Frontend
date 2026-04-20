@@ -4,7 +4,13 @@ import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
 import { Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff } from 'lucide-react';
 
-const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || 'https://studybuddy-backend-pl2i.onrender.com';
+const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || (isLocalhost
+    ? 'http://localhost:5000'
+    : 'https://studybuddy-backend-pl2i.onrender.com');
 
 const iceServers = [
     { urls: 'stun:stun.l.google.com:19302' },

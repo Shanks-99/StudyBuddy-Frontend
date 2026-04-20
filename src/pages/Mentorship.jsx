@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import {
@@ -17,14 +17,14 @@ import {
     Sparkles,
 } from 'lucide-react';
 import {
-    getSlotsForDate,
+    DEFAULT_WEEKLY_AVAILABILITY,
+    getMentorAvailabilityByName,
     getWeekdayKeyFromDate,
-    getMentorWeeklyAvailability,
+    getSlotsForDateFromAvailability,
     HOURLY_SLOT_OPTIONS,
     sortSlotsByHour,
 } from '../services/mentorAvailabilityService';
-import { getInstructorMentorProfile } from '../services/instructorMentorProfileService';
-import { getCurrentUser } from '../services/authService';
+import { getMentorsForStudents } from '../services/instructorMentorProfileService';
 import {
     createSessionRequest,
     getMentorshipCallRoomId,
@@ -152,35 +152,70 @@ const Mentorship = () => {
     const [viewYear, setViewYear] = useState(new Date().getFullYear());
     const [sessionVersion, setSessionVersion] = useState(0);
     const [showInstantModal, setShowInstantModal] = useState(false);
+    const [featuredSessions, setFeaturedSessions] = useState([]);
+    const [instructorMentorProfile, setInstructorMentorProfile] = useState(null);
+    const [mentorAvailability, setMentorAvailability] = useState(DEFAULT_WEEKLY_AVAILABILITY);
+    const [instantAvailableMentors, setInstantAvailableMentors] = useState([]);
 
-    const currentUser = useMemo(() => getCurrentUser(), []);
+    const featuredSessionCards = useMemo(
+        () => featuredSessions.map((session) => ({
+            ...session,
+            mentor: session.mentorName,
+            topic: session.subject,
+            time: `${session.dateLabel}, ${session.timeSlot}`,
+            canJoinNow: isSessionJoinableNow(session),
+        })),
+        [featuredSessions]
+    );
+
+    useEffect(() => {
+        const loadMentorshipData = async () => {
+            try {
+                const mentors = await getMentorsForStudents();
+                const firstInstructorMentor = Array.isArray(mentors) && mentors.length > 0 ? mentors[0] : null;
+                setInstructorMentorProfile(firstInstructorMentor || null);
+
+                if (firstInstructorMentor?.name) {
+                    const availability = await getMentorAvailabilityByName(firstInstructorMentor.name);
+                    setMentorAvailability(availability);
+                } else {
+                    setMentorAvailability(DEFAULT_WEEKLY_AVAILABILITY);
+                }
+
+                const sessions = await getUpcomingSessionsForStudent();
+                setFeaturedSessions(Array.isArray(sessions) ? sessions : []);
+            } catch (error) {
+                console.error('Failed to load mentorship data:', error);
+            }
+        };
+
+        loadMentorshipData();
+    }, [sessionVersion]);
 
     const mentorsForListing = useMemo(() => {
-        const instructorProfile = getInstructorMentorProfile();
-        if (!instructorProfile?.name) return mentorData;
+        if (!instructorMentorProfile?.name) return mentorData;
 
-        const weeklyAvailability = getMentorWeeklyAvailability();
-        const hasAvailability = Object.values(weeklyAvailability).some(
+        const hasAvailability = Object.values(mentorAvailability).some(
             (slots) => Array.isArray(slots) && slots.length > 0
         );
 
-        const derivedTags = (instructorProfile.specializedCourses || '')
+        const derivedTags = (instructorMentorProfile.specializedCourses || '')
             .split(',')
             .map((tag) => tag.trim())
             .filter(Boolean)
             .slice(0, 3);
 
         const instructorMentor = {
-            id: 999,
-            name: instructorProfile.name,
-            initials: instructorProfile.name
+            id: instructorMentorProfile._id || 999,
+            name: instructorMentorProfile.name,
+            initials: instructorMentorProfile.name
                 .split(' ')
                 .map((part) => part[0])
                 .join('')
                 .slice(0, 2)
                 .toUpperCase() || 'IM',
             title: 'Instructor Mentor',
-            bio: instructorProfile.description || 'Experienced mentor available for one-on-one sessions.',
+            bio: instructorMentorProfile.description || 'Experienced mentor available for one-on-one sessions.',
             category: 'Computer Science',
             tags: derivedTags.length > 0 ? derivedTags : ['Mentorship'],
             rating: 5.0,
@@ -191,7 +226,7 @@ const Mentorship = () => {
 
         const withoutDuplicate = mentorData.filter((mentor) => mentor.name !== instructorMentor.name);
         return [instructorMentor, ...withoutDuplicate];
-    }, []);
+    }, [instructorMentorProfile, mentorAvailability]);
 
     const filteredMentors = useMemo(() => {
         const normalized = query.trim().toLowerCase();
@@ -215,47 +250,48 @@ const Mentorship = () => {
         });
     }, [query, activeCategory, mentorsForListing]);
 
-    const featuredSessions = useMemo(() => {
-        const sessions = getUpcomingSessionsForStudent(currentUser?.id, currentUser?.name);
-        return sessions.map((session) => ({
-            id: session.id,
-            requestId: session.requestId,
-            mentor: session.mentorName,
-            topic: session.subject,
-            dateLabel: session.dateLabel,
-            timeSlot: session.timeSlot,
-            time: `${session.dateLabel}, ${session.timeSlot}`,
-            canJoinNow: isSessionJoinableNow(session),
-        }));
-    }, [currentUser, sessionVersion]);
-
     const nowContext = useMemo(() => {
         const now = new Date();
         const currentSlot = HOURLY_SLOT_OPTIONS[now.getHours()];
         const dateLabel = `${monthNames[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
-        const weekdayKey = getWeekdayKeyFromDate(now.getDate(), now.getFullYear(), now.getMonth());
 
         return {
             now,
             currentSlot,
             dateLabel,
-            weekdayKey,
         };
-    }, [sessionVersion]);
+    }, []);
 
-    const instantAvailableMentors = useMemo(() => {
-        return mentorsForListing.filter((mentor) => {
-            const isInstructorMentor = mentor.id === 999;
+    const refreshInstantAvailableMentors = async () => {
+        try {
+            const candidates = mentorsForListing.filter((mentor) => {
+                const isInstructorMentor = mentor.name === instructorMentorProfile?.name;
 
-            const isAvailableNow = isInstructorMentor
-                ? getSlotsForDate(nowContext.now.getDate(), nowContext.now.getFullYear(), nowContext.now.getMonth()).includes(nowContext.currentSlot)
-                : mentor.active;
+                const isAvailableNow = isInstructorMentor
+                    ? getSlotsForDateFromAvailability(
+                        mentorAvailability,
+                        nowContext.now.getDate(),
+                        nowContext.now.getFullYear(),
+                        nowContext.now.getMonth()
+                    ).includes(nowContext.currentSlot)
+                    : mentor.active;
 
-            const isBusyNow = isMentorBusyAt(mentor.name, nowContext.dateLabel, nowContext.currentSlot);
+                return isAvailableNow;
+            });
 
-            return isAvailableNow && !isBusyNow;
-        });
-    }, [mentorsForListing, nowContext, sessionVersion]);
+            const busyChecks = await Promise.all(
+                candidates.map(async (mentor) => {
+                    const busy = await isMentorBusyAt(mentor.name, nowContext.dateLabel, nowContext.currentSlot);
+                    return { mentor, busy };
+                })
+            );
+
+            setInstantAvailableMentors(busyChecks.filter((item) => !item.busy).map((item) => item.mentor));
+        } catch (error) {
+            console.error('Failed to refresh instant mentors:', error);
+            setInstantAvailableMentors([]);
+        }
+    };
 
     const closeBookingModal = () => {
         setBookingMentor(null);
@@ -272,7 +308,8 @@ const Mentorship = () => {
         setSelectedTime('');
     };
 
-    const handleOpenInstantModal = () => {
+    const handleOpenInstantModal = async () => {
+        await refreshInstantAvailableMentors();
         setShowInstantModal(true);
     };
 
@@ -280,20 +317,23 @@ const Mentorship = () => {
         setShowInstantModal(false);
     };
 
-    const handleRequestInstantSession = (mentor) => {
-        createSessionRequest({
-            mentorName: mentor.name,
-            mentorId: mentor.id,
-            studentName: currentUser?.name || 'Student',
-            studentId: currentUser?.id || 'student-id',
-            subject: mentor.category,
-            dateLabel: nowContext.dateLabel,
-            timeSlot: nowContext.currentSlot,
-            message: `Instant session request for ${mentor.category}`,
-        });
+    const handleRequestInstantSession = async (mentor) => {
+        try {
+            await createSessionRequest({
+                mentorName: mentor.name,
+                mentorId: mentor.id,
+                subject: mentor.category,
+                dateLabel: nowContext.dateLabel,
+                timeSlot: nowContext.currentSlot,
+                message: `Instant session request for ${mentor.category}`,
+            });
 
-        alert(`Instant request sent to ${mentor.name} for ${nowContext.currentSlot}.`);
-        setSessionVersion((prev) => prev + 1);
+            alert(`Instant request sent to ${mentor.name} for ${nowContext.currentSlot}.`);
+            await refreshInstantAvailableMentors();
+            setSessionVersion((prev) => prev + 1);
+        } catch (error) {
+            alert(error?.response?.data?.msg || 'Failed to send instant request.');
+        }
     };
 
     const handleJoinSession = (session) => {
@@ -306,7 +346,7 @@ const Mentorship = () => {
         navigate(`/mentorship-call/${encodeURIComponent(callRoomId)}`);
     };
 
-    const handleConfirmBooking = () => {
+    const handleConfirmBooking = async () => {
         if (!bookingMentor || !selectedDate || !selectedTime) return;
 
         const today = new Date();
@@ -317,20 +357,22 @@ const Mentorship = () => {
             return;
         }
 
-        createSessionRequest({
-            mentorName: bookingMentor.name,
-            mentorId: bookingMentor.id,
-            studentName: currentUser?.name || 'Student',
-            studentId: currentUser?.id || 'student-id',
-            subject: bookingMentor.category,
-            dateLabel: `${monthNames[viewMonthIndex]} ${selectedDate}, ${viewYear}`,
-            timeSlot: selectedTime,
-            message: `Session request for ${bookingMentor.category}`,
-        });
+        try {
+            await createSessionRequest({
+                mentorName: bookingMentor.name,
+                mentorId: bookingMentor.id,
+                subject: bookingMentor.category,
+                dateLabel: `${monthNames[viewMonthIndex]} ${selectedDate}, ${viewYear}`,
+                timeSlot: selectedTime,
+                message: `Session request for ${bookingMentor.category}`,
+            });
 
-        alert(`Session request sent to ${bookingMentor.name}.`);
-        closeBookingModal();
-        setSessionVersion((prev) => prev + 1);
+            alert(`Session request sent to ${bookingMentor.name}.`);
+            closeBookingModal();
+            setSessionVersion((prev) => prev + 1);
+        } catch (error) {
+            alert(error?.response?.data?.msg || 'Failed to create session request.');
+        }
     };
 
     const daysInViewMonth = useMemo(() => new Date(viewYear, viewMonthIndex + 1, 0).getDate(), [viewMonthIndex, viewYear]);
@@ -345,8 +387,8 @@ const Mentorship = () => {
     }, [daysInViewMonth, firstWeekdayOfMonth]);
 
     const availableSlots = useMemo(
-        () => getSlotsForDate(selectedDate, viewYear, viewMonthIndex),
-        [selectedDate, viewYear, viewMonthIndex]
+        () => getSlotsForDateFromAvailability(mentorAvailability, selectedDate, viewYear, viewMonthIndex),
+        [mentorAvailability, selectedDate, viewYear, viewMonthIndex]
     );
     const selectedDayKey = useMemo(
         () => getWeekdayKeyFromDate(selectedDate, viewYear, viewMonthIndex),
@@ -531,7 +573,7 @@ const Mentorship = () => {
                                 <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-lg p-6">
                                     <h3 className="text-xl font-bold text-white mb-4">Your Upcoming Sessions</h3>
                                     <div className="space-y-3">
-                                        {featuredSessions.map((item) => (
+                                        {featuredSessionCards.map((item) => (
                                             <div
                                                 key={`${item.mentor}-${item.time}`}
                                                 className="rounded-xl border border-white/10 bg-white/5 p-4"
@@ -556,7 +598,7 @@ const Mentorship = () => {
                                                 )}
                                             </div>
                                         ))}
-                                        {featuredSessions.length === 0 && (
+                                        {featuredSessionCards.length === 0 && (
                                             <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
                                                 No upcoming sessions yet. Book a session and wait for mentor acceptance.
                                             </div>
@@ -672,7 +714,7 @@ const Mentorship = () => {
                                             const now = new Date();
                                             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                                             const isPastDay = dayDate < todayStart;
-                                            const daySlots = getSlotsForDate(day, viewYear, viewMonthIndex);
+                                            const daySlots = getSlotsForDateFromAvailability(mentorAvailability, day, viewYear, viewMonthIndex);
                                             const isAvailableDay = daySlots.length > 0 && !isPastDay;
                                             const activeDay = selectedDate === day;
 

@@ -31,6 +31,7 @@ function App() {
         <Route path="/mentorship-call/:callId" element={<MentorshipCall />} />
         <Route path="/studyroom" element={<StudyRoomList />} />
         <Route path="/studyroom/:roomId" element={<ActiveStudyRoom />} />
+        <Route path="/studybuddy" element={<Navigate to="/login" replace />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
       </Routes>
     </Router>

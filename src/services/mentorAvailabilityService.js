@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'mentorWeeklyAvailability';
+import api from './api';
 
 export const WEEK_DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 
@@ -22,39 +22,56 @@ const defaultAvailability = {
     sat: [],
 };
 
+export const DEFAULT_WEEKLY_AVAILABILITY = defaultAvailability;
+
 export const sortSlotsByHour = (slots = []) => {
     const ranking = new Map(HOURLY_SLOT_OPTIONS.map((slot, index) => [slot, index]));
     return [...slots].sort((a, b) => (ranking.get(a) ?? 999) - (ranking.get(b) ?? 999));
 };
 
-export const getMentorWeeklyAvailability = () => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return defaultAvailability;
-
-        const parsed = JSON.parse(raw);
-        return {
-            ...defaultAvailability,
-            ...parsed,
-        };
-    } catch (error) {
-        return defaultAvailability;
-    }
+export const getMentorWeeklyAvailability = async () => {
+    const response = await api.get('/mentorship/availability/me');
+    return {
+        ...defaultAvailability,
+        ...(response.data?.availability || {}),
+    };
 };
 
-export const saveMentorWeeklyAvailability = (availability) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(availability));
-    return availability;
+export const getMentorAvailabilityByName = async (mentorName) => {
+    if (!mentorName) return { ...defaultAvailability };
+    const response = await api.get('/mentorship/availability/by-mentor', {
+        params: { mentorName },
+    });
+    return {
+        ...defaultAvailability,
+        ...(response.data?.availability || {}),
+    };
 };
 
-export const getSlotsForDate = (dayOfMonth, year = 2026, monthIndex = 3) => {
+export const saveMentorWeeklyAvailability = async (availability) => {
+    const response = await api.put('/mentorship/availability/me', availability);
+    return {
+        ...defaultAvailability,
+        ...(response.data?.availability || {}),
+    };
+};
+
+export const getSlotsForDateFromAvailability = (availability, dayOfMonth, year = 2026, monthIndex = 3) => {
     if (!dayOfMonth) return [];
 
     const weekdayIndex = new Date(year, monthIndex, dayOfMonth).getDay();
     const key = WEEK_DAYS[weekdayIndex];
-    const availability = getMentorWeeklyAvailability();
+    const resolved = {
+        ...defaultAvailability,
+        ...(availability || {}),
+    };
 
-    return Array.isArray(availability[key]) ? availability[key] : [];
+    return Array.isArray(resolved[key]) ? resolved[key] : [];
+};
+
+export const getSlotsForDate = async (dayOfMonth, year = 2026, monthIndex = 3) => {
+    const availability = await getMentorWeeklyAvailability();
+    return getSlotsForDateFromAvailability(availability, dayOfMonth, year, monthIndex);
 };
 
 export const getWeekdayKeyFromDate = (dayOfMonth, year = 2026, monthIndex = 3) => {

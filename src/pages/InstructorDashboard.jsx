@@ -49,32 +49,45 @@ const InstructorDashboard = () => {
     const location = useLocation();
 
     useEffect(() => {
-        const currentUser = getCurrentUser();
-        if (!currentUser) {
-            navigate('/login');
-        } else if (currentUser.role !== 'teacher') {
-            navigate('/student-dashboard');
-        } else {
-            setUser(currentUser);
-            const existingProfile = getInstructorMentorProfile();
-
-            if (existingProfile) {
-                setProfileForm({
-                    name: existingProfile.name || currentUser.name || '',
-                    email: existingProfile.email || '',
-                    specializedCourses: existingProfile.specializedCourses || '',
-                    description: existingProfile.description || '',
-                    degreeFiles: Array.isArray(existingProfile.degreeFiles) ? existingProfile.degreeFiles : [],
-                });
-                setProfileStatus(existingProfile.status || 'pending');
-            } else {
-                setProfileForm((prev) => ({
-                    ...prev,
-                    name: currentUser.name || '',
-                }));
-                setProfileStatus('missing');
+        const initialize = async () => {
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                navigate('/login');
+                return;
             }
-        }
+
+            if (currentUser.role !== 'teacher') {
+                navigate('/student-dashboard');
+                return;
+            }
+
+            setUser(currentUser);
+
+            try {
+                const existingProfile = await getInstructorMentorProfile();
+
+                if (existingProfile) {
+                    setProfileForm({
+                        name: existingProfile.name || currentUser.name || '',
+                        email: existingProfile.email || '',
+                        specializedCourses: existingProfile.specializedCourses || '',
+                        description: existingProfile.description || '',
+                        degreeFiles: Array.isArray(existingProfile.degreeFiles) ? existingProfile.degreeFiles : [],
+                    });
+                    setProfileStatus(existingProfile.status || 'pending');
+                } else {
+                    setProfileForm((prev) => ({
+                        ...prev,
+                        name: currentUser.name || '',
+                    }));
+                    setProfileStatus('missing');
+                }
+            } catch (error) {
+                console.error('Failed to load mentor profile:', error);
+            }
+        };
+
+        initialize();
     }, [navigate]);
 
     useEffect(() => {
@@ -118,7 +131,7 @@ const InstructorDashboard = () => {
         }));
     };
 
-    const handleProfileSubmit = (event) => {
+    const handleProfileSubmit = async (event) => {
         event.preventDefault();
 
         const payload = {
@@ -134,10 +147,14 @@ const InstructorDashboard = () => {
             return;
         }
 
-        const saved = saveInstructorMentorProfile(payload);
-        setProfileStatus(saved.status);
-        setShowProfileModal(false);
-        alert('Profile saved successfully.');
+        try {
+            const saved = await saveInstructorMentorProfile(payload);
+            setProfileStatus(saved?.status || 'pending');
+            setShowProfileModal(false);
+            alert('Profile saved successfully.');
+        } catch (error) {
+            alert('Failed to save profile.');
+        }
     };
 
     if (!user) return null;

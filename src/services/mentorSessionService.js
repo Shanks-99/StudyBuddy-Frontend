@@ -1,102 +1,41 @@
-const STORAGE_KEY = 'mentorshipSessionData';
+import api from './api';
 
-const defaultData = {
-    requests: [],
-    upcoming: [],
-    past: [],
+export const createSessionRequest = async (payload) => {
+    const response = await api.post('/mentorship/requests', payload);
+    return response.data?.session || null;
 };
 
-const readData = () => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (!raw) return { ...defaultData };
-        const parsed = JSON.parse(raw);
-        return {
-            ...defaultData,
-            ...parsed,
-            requests: Array.isArray(parsed?.requests) ? parsed.requests : [],
-            upcoming: Array.isArray(parsed?.upcoming) ? parsed.upcoming : [],
-            past: Array.isArray(parsed?.past) ? parsed.past : [],
-        };
-    } catch (error) {
-        return { ...defaultData };
-    }
+export const getSessionRequestsForMentor = async (mentorName) => {
+    const response = await api.get('/mentorship/requests/mentor', {
+        params: mentorName ? { mentorName } : {},
+    });
+    return Array.isArray(response.data?.requests) ? response.data.requests : [];
 };
 
-const writeData = (data) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    return data;
+export const acceptSessionRequest = async (requestId, mentorName) => {
+    const response = await api.patch(`/mentorship/requests/${requestId}/accept`, {
+        mentorName,
+    });
+    return response.data?.session || null;
 };
 
-export const createSessionRequest = (payload) => {
-    const data = readData();
-    const request = {
-        id: `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        ...payload,
-    };
-
-    data.requests = [request, ...data.requests];
-    writeData(data);
-    return request;
+export const declineSessionRequest = async (requestId, mentorName) => {
+    const response = await api.patch(`/mentorship/requests/${requestId}/decline`, {
+        mentorName,
+    });
+    return Boolean(response.data?.session);
 };
 
-export const getSessionRequestsForMentor = (mentorName) => {
-    const data = readData();
-    return data.requests.filter((request) => request.mentorName === mentorName && request.status === 'pending');
+export const getUpcomingSessionsForMentor = async (mentorName) => {
+    const response = await api.get('/mentorship/sessions/upcoming/mentor', {
+        params: mentorName ? { mentorName } : {},
+    });
+    return Array.isArray(response.data?.sessions) ? response.data.sessions : [];
 };
 
-export const acceptSessionRequest = (requestId, mentorName) => {
-    const data = readData();
-    const request = data.requests.find((item) => item.id === requestId && item.mentorName === mentorName);
-    if (!request) return null;
-
-    request.status = 'accepted';
-    request.updatedAt = new Date().toISOString();
-
-    const upcomingItem = {
-        id: `up-${request.id}`,
-        requestId: request.id,
-        mentorName: request.mentorName,
-        studentName: request.studentName,
-        studentId: request.studentId,
-        subject: request.subject,
-        dateLabel: request.dateLabel,
-        timeSlot: request.timeSlot,
-        mode: 'Video',
-        status: 'Upcoming',
-        createdAt: new Date().toISOString(),
-    };
-
-    const alreadyExists = data.upcoming.some((session) => session.requestId === request.id);
-    if (!alreadyExists) {
-        data.upcoming = [upcomingItem, ...data.upcoming];
-    }
-
-    writeData(data);
-    return upcomingItem;
-};
-
-export const declineSessionRequest = (requestId, mentorName) => {
-    const data = readData();
-    const request = data.requests.find((item) => item.id === requestId && item.mentorName === mentorName);
-    if (!request) return false;
-
-    request.status = 'declined';
-    request.updatedAt = new Date().toISOString();
-    writeData(data);
-    return true;
-};
-
-export const getUpcomingSessionsForMentor = (mentorName) => {
-    const data = readData();
-    return data.upcoming.filter((item) => item.mentorName === mentorName);
-};
-
-export const getUpcomingSessionsForStudent = (studentId, studentName) => {
-    const data = readData();
-    return data.upcoming.filter((item) => item.studentId === studentId || item.studentName === studentName);
+export const getUpcomingSessionsForStudent = async () => {
+    const response = await api.get('/mentorship/sessions/upcoming/student');
+    return Array.isArray(response.data?.sessions) ? response.data.sessions : [];
 };
 
 const parseTimeSlot = (timeSlot) => {
@@ -141,29 +80,17 @@ export const isSessionJoinableNow = (session, now = new Date()) => {
 };
 
 export const getMentorshipCallRoomId = (session) => {
-    const base = session?.requestId || session?.id;
+    const base = session?.requestId || session?.id || session?._id;
     if (!base) return null;
     return `mentorship-${base}`;
 };
 
 export const isMentorBusyAt = (mentorName, dateLabel, timeSlot) => {
-    if (!mentorName || !dateLabel || !timeSlot) return false;
+    if (!mentorName || !dateLabel || !timeSlot) return Promise.resolve(false);
 
-    const data = readData();
-    const hasPendingRequest = data.requests.some(
-        (item) =>
-            item.mentorName === mentorName &&
-            item.dateLabel === dateLabel &&
-            item.timeSlot === timeSlot &&
-            item.status === 'pending'
-    );
-
-    if (hasPendingRequest) return true;
-
-    return data.upcoming.some(
-        (item) =>
-            item.mentorName === mentorName &&
-            item.dateLabel === dateLabel &&
-            item.timeSlot === timeSlot
-    );
+    return api
+        .get('/mentorship/busy', {
+            params: { mentorName, dateLabel, timeSlot },
+        })
+        .then((response) => Boolean(response.data?.busy));
 };

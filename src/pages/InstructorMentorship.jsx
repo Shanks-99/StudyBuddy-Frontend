@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { getInstructorMentorProfile } from '../services/instructorMentorProfileService';
 import {
+    DEFAULT_WEEKLY_AVAILABILITY,
     getMentorWeeklyAvailability,
     HOURLY_SLOT_OPTIONS,
     saveMentorWeeklyAvailability,
@@ -38,31 +39,47 @@ const dayLabels = {
 const InstructorMentorship = () => {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
-    const [weeklyAvailability, setWeeklyAvailability] = useState(getMentorWeeklyAvailability());
+    const [weeklyAvailability, setWeeklyAvailability] = useState(DEFAULT_WEEKLY_AVAILABILITY);
     const [activePanel, setActivePanel] = useState('sessions');
     const [mentorRequests, setMentorRequests] = useState([]);
     const [mentorUpcoming, setMentorUpcoming] = useState([]);
     const [mentorName, setMentorName] = useState('');
 
     useEffect(() => {
-        const currentUser = getCurrentUser();
-        if (!currentUser) {
-            navigate('/login');
-            return;
-        }
+        const initialize = async () => {
+            const currentUser = getCurrentUser();
+            if (!currentUser) {
+                navigate('/login');
+                return;
+            }
 
-        if (currentUser.role !== 'teacher') {
-            navigate('/student-dashboard');
-            return;
-        }
+            if (currentUser.role !== 'teacher') {
+                navigate('/student-dashboard');
+                return;
+            }
 
-        setUser(currentUser);
+            setUser(currentUser);
 
-        const profile = getInstructorMentorProfile();
-        const resolvedMentorName = profile?.name || currentUser.name;
-        setMentorName(resolvedMentorName);
-        setMentorRequests(getSessionRequestsForMentor(resolvedMentorName));
-        setMentorUpcoming(getUpcomingSessionsForMentor(resolvedMentorName));
+            try {
+                const profile = await getInstructorMentorProfile();
+                const resolvedMentorName = profile?.name || currentUser.name;
+                setMentorName(resolvedMentorName);
+
+                const [availability, requests, upcoming] = await Promise.all([
+                    getMentorWeeklyAvailability(),
+                    getSessionRequestsForMentor(resolvedMentorName),
+                    getUpcomingSessionsForMentor(resolvedMentorName),
+                ]);
+
+                setWeeklyAvailability(availability);
+                setMentorRequests(requests);
+                setMentorUpcoming(upcoming);
+            } catch (error) {
+                console.error('Failed to initialize instructor mentorship:', error);
+            }
+        };
+
+        initialize();
     }, [navigate]);
 
     const upcomingSessions = mentorUpcoming.map((session) => ({
@@ -78,17 +95,25 @@ const InstructorMentorship = () => {
     ];
 
     const sessionRequests = mentorRequests.map((request) => ({
-        id: request.id,
+        id: request.id || request._id,
         student: request.studentName,
         subject: request.subject,
         preferred: `${request.dateLabel}, ${request.timeSlot}`,
         message: request.message,
     }));
 
-    const refreshMentorSessionData = () => {
+    const refreshMentorSessionData = async () => {
         if (!mentorName) return;
-        setMentorRequests(getSessionRequestsForMentor(mentorName));
-        setMentorUpcoming(getUpcomingSessionsForMentor(mentorName));
+        try {
+            const [requests, upcoming] = await Promise.all([
+                getSessionRequestsForMentor(mentorName),
+                getUpcomingSessionsForMentor(mentorName),
+            ]);
+            setMentorRequests(requests);
+            setMentorUpcoming(upcoming);
+        } catch (error) {
+            console.error('Failed to refresh mentor session data:', error);
+        }
     };
 
     useEffect(() => {
@@ -101,14 +126,14 @@ const InstructorMentorship = () => {
         return () => clearInterval(interval);
     }, [mentorName]);
 
-    const handleAcceptRequest = (requestId) => {
-        acceptSessionRequest(requestId, mentorName);
-        refreshMentorSessionData();
+    const handleAcceptRequest = async (requestId) => {
+        await acceptSessionRequest(requestId, mentorName);
+        await refreshMentorSessionData();
     };
 
-    const handleDeclineRequest = (requestId) => {
-        declineSessionRequest(requestId, mentorName);
-        refreshMentorSessionData();
+    const handleDeclineRequest = async (requestId) => {
+        await declineSessionRequest(requestId, mentorName);
+        await refreshMentorSessionData();
     };
 
     const handleTakeSession = (session) => {
@@ -279,9 +304,14 @@ const InstructorMentorship = () => {
                                             Clear All
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                saveMentorWeeklyAvailability(weeklyAvailability);
-                                                alert('Availability saved and connected to student booking.');
+                                            onClick={async () => {
+                                                try {
+                                                    const saved = await saveMentorWeeklyAvailability(weeklyAvailability);
+                                                    setWeeklyAvailability(saved);
+                                                    alert('Availability saved and connected to student booking.');
+                                                } catch (error) {
+                                                    alert('Failed to save availability.');
+                                                }
                                             }}
                                             className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700"
                                         >

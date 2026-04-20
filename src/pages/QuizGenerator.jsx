@@ -7,6 +7,14 @@ import { generateQuizWithAI, createQuiz, getAllQuizzes, deleteQuiz, updateQuiz }
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 
+const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || (isLocalhost
+    ? 'http://localhost:5000'
+    : 'https://studybuddy-backend-pl2i.onrender.com');
+
 const QuizGenerator = () => {
     const [quizzes, setQuizzes] = useState([]);
     const [isGenerating, setIsGenerating] = useState(false);
@@ -46,7 +54,7 @@ const QuizGenerator = () => {
         fetchQuizzes();
 
         // Socket.io connection
-        const socket = io(process.env.REACT_APP_SOCKET_URL || 'https://studybuddy-backend-pl2i.onrender.com', {
+        const socket = io(SOCKET_SERVER_URL, {
             transports: ['websocket', 'polling'],
             withCredentials: true
         });

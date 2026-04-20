@@ -1,12 +1,13 @@
-const STORAGE_KEY = 'instructorMentorProfile';
+import api from './api';
 
-export const getInstructorMentorProfile = () => {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? JSON.parse(raw) : null;
-    } catch (error) {
-        return null;
-    }
+export const getInstructorMentorProfile = async () => {
+    const response = await api.get('/mentorship/mentor-profile/me');
+    return response.data?.profile || null;
+};
+
+export const getMentorsForStudents = async () => {
+    const response = await api.get('/mentorship/mentors');
+    return Array.isArray(response.data?.mentors) ? response.data.mentors : [];
 };
 
 export const isInstructorMentorProfileComplete = (profile) => {
@@ -25,13 +26,13 @@ export const isInstructorMentorProfileComplete = (profile) => {
     return allFilled && hasDegreeFiles;
 };
 
-export const saveInstructorMentorProfile = (profileInput) => {
+export const saveInstructorMentorProfile = async (profileInput) => {
     const payload = {
         ...profileInput,
         status: 'pending',
         submittedAt: new Date().toISOString(),
     };
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-    return payload;
+    const response = await api.put('/mentorship/mentor-profile/me', payload);
+    return response.data?.profile || null;
 };
