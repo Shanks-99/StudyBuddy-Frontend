@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import InstructorSidebar from '../components/InstructorSidebar';
 import { getCurrentUser } from '../services/authService';
@@ -22,8 +22,11 @@ import {
     declineSessionRequest,
     getMentorshipCallRoomId,
     getSessionRequestsForMentor,
+    getSessionStartDateTime,
     getUpcomingSessionsForMentor,
+    isSessionPast,
     isSessionJoinableNow,
+    isSessionUpcomingOrJoinableNow,
 } from '../services/mentorSessionService';
 
 const dayLabels = {
@@ -82,17 +85,37 @@ const InstructorMentorship = () => {
         initialize();
     }, [navigate]);
 
-    const upcomingSessions = mentorUpcoming.map((session) => ({
-        ...session,
-        student: session.studentName,
-        time: `${session.dateLabel}, ${session.timeSlot}`,
-        canJoinNow: isSessionJoinableNow(session),
-    }));
+    const parsedSessions = useMemo(
+        () => mentorUpcoming
+            .map((session) => {
+                const startAt = getSessionStartDateTime(session?.dateLabel, session?.timeSlot);
+                return {
+                    ...session,
+                    id: session.id || session._id || `${session.studentName}-${session.dateLabel}-${session.timeSlot}`,
+                    student: session.studentName,
+                    time: `${session.dateLabel}, ${session.timeSlot}`,
+                    startAt,
+                    canJoinNow: isSessionJoinableNow(session),
+                };
+            })
+            .filter((session) => Boolean(session.startAt)),
+        [mentorUpcoming]
+    );
 
-    const pastSessions = [
-        { student: 'Zain Malik', subject: 'OS Concepts', time: 'Last Friday, 3:00 PM', duration: '1h', feedback: '4.8/5' },
-        { student: 'Sara Ahmed', subject: 'Linear Algebra', time: 'Last Thursday, 11:00 AM', duration: '1h', feedback: '5.0/5' },
-    ];
+    const upcomingSessions = useMemo(() => {
+        const now = new Date();
+        return parsedSessions
+            .filter((session) => isSessionUpcomingOrJoinableNow(session, now))
+            .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+    }, [parsedSessions]);
+
+    const recentSessions = useMemo(() => {
+        const now = new Date();
+        return parsedSessions
+            .filter((session) => isSessionPast(session, now))
+            .sort((a, b) => b.startAt.getTime() - a.startAt.getTime())
+            .slice(0, 3);
+    }, [parsedSessions]);
 
     const sessionRequests = mentorRequests.map((request) => ({
         id: request.id || request._id,
@@ -207,16 +230,13 @@ const InstructorMentorship = () => {
                                     <h3 className="text-white font-bold text-xl mb-4">Upcoming Sessions</h3>
                                     <div className="space-y-3">
                                         {upcomingSessions.map((session) => (
-                                            <div key={`${session.student}-${session.time}`} className="rounded-xl p-4 border border-white/10 bg-black/20 flex items-center justify-between gap-4">
+                                            <div key={session.id} className="rounded-xl p-4 border border-white/10 bg-black/20 flex items-center justify-between gap-4">
                                                 <div>
                                                     <p className="text-white font-semibold">{session.student}</p>
                                                     <p className="text-purple-200 text-sm">{session.subject}</p>
                                                     <p className="text-gray-400 text-sm mt-1">{session.time} • {session.mode}</p>
                                                 </div>
                                                 <div className="flex flex-col items-end gap-2">
-                                                    <span className="px-3 py-1 rounded-lg text-xs bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
-                                                        {session.status}
-                                                    </span>
                                                     {session.canJoinNow && (
                                                         <button
                                                             onClick={() => handleTakeSession(session)}
@@ -224,6 +244,11 @@ const InstructorMentorship = () => {
                                                         >
                                                             Take Session
                                                         </button>
+                                                    )}
+                                                    {!session.canJoinNow && (
+                                                        <span className="px-3 py-1 rounded-lg text-xs bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                                                            {session.status}
+                                                        </span>
                                                     )}
                                                 </div>
                                             </div>
@@ -237,15 +262,20 @@ const InstructorMentorship = () => {
                                 </div>
 
                                 <div className="rounded-2xl p-5 border border-white/15 bg-white/10">
-                                    <h3 className="text-white font-bold text-xl mb-4">Past Sessions</h3>
+                                    <h3 className="text-white font-bold text-xl mb-4">Recent Sessions (Top 3)</h3>
                                     <div className="space-y-3">
-                                        {pastSessions.map((session) => (
-                                            <div key={`${session.student}-${session.time}`} className="rounded-xl p-4 border border-white/10 bg-black/20">
+                                        {recentSessions.map((session) => (
+                                            <div key={`recent-${session.id}`} className="rounded-xl p-4 border border-white/10 bg-black/20">
                                                 <p className="text-white font-semibold">{session.student}</p>
                                                 <p className="text-purple-200 text-sm">{session.subject}</p>
-                                                <p className="text-gray-400 text-sm mt-1">{session.time} • {session.duration} • Feedback {session.feedback}</p>
+                                                <p className="text-gray-400 text-sm mt-1">{session.time} • {session.mode || 'Video'}</p>
                                             </div>
                                         ))}
+                                        {recentSessions.length === 0 && (
+                                            <div className="rounded-xl p-4 border border-white/10 bg-black/20 text-sm text-gray-300">
+                                                No recent sessions yet.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

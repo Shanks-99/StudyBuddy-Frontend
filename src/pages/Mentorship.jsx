@@ -11,7 +11,6 @@ import {
     Bell,
     CalendarDays,
     CheckCircle2,
-    Clock3,
     Video,
     MessageSquare,
     Sparkles,
@@ -28,93 +27,25 @@ import { getMentorsForStudents } from '../services/instructorMentorProfileServic
 import {
     createSessionRequest,
     getMentorshipCallRoomId,
+    getSessionStartDateTime,
+    isSessionPast,
     isSessionJoinableNow,
+    isSessionUpcomingOrJoinableNow,
     getUpcomingSessionsForStudent,
     isMentorBusyAt,
 } from '../services/mentorSessionService';
 
-const mentorData = [
-    {
-        id: 1,
-        name: 'Sarah Jenkins',
-        initials: 'SJ',
-        title: 'PhD Candidate, Stanford',
-        bio: 'Specializing in Calculus, Linear Algebra, and exam prep strategy for undergrads.',
-        category: 'Mathematics',
-        tags: ['Math', 'Calculus', 'SAT Prep'],
-        rating: 4.9,
-        sessions: 124,
-        rate: 45,
-        active: true,
-    },
-    {
-        id: 2,
-        name: 'David Chen',
-        initials: 'DC',
-        title: 'MSc Computer Science, MIT',
-        bio: 'Expert in Python, data structures, and algorithms with interview coaching focus.',
-        category: 'Computer Science',
-        tags: ['Coding', 'Python', 'Algorithms'],
-        rating: 5.0,
-        sessions: 89,
-        rate: 60,
-        active: false,
-    },
-    {
-        id: 3,
-        name: 'Elena Rodriguez',
-        initials: 'ER',
-        title: 'BA English Lit, Yale',
-        bio: 'Creative writing coach and essay editor helping students craft standout essays.',
-        category: 'Literature',
-        tags: ['English', 'Writing', 'Essay'],
-        rating: 4.8,
-        sessions: 210,
-        rate: 40,
-        active: true,
-    },
-    {
-        id: 4,
-        name: 'Aamir Qureshi',
-        initials: 'AQ',
-        title: 'Finance Mentor, LUMS',
-        bio: 'Business strategy, startup financial models, and case interview practice.',
-        category: 'Business',
-        tags: ['Business', 'Finance', 'Case Study'],
-        rating: 4.7,
-        sessions: 97,
-        rate: 50,
-        active: true,
-    },
-    {
-        id: 5,
-        name: 'Noah Brooks',
-        initials: 'NB',
-        title: 'Research Fellow, Oxford',
-        bio: 'Physics and chemistry concept clarity for A-level and university foundation.',
-        category: 'Science',
-        tags: ['Physics', 'Chemistry', 'Lab Skills'],
-        rating: 4.9,
-        sessions: 175,
-        rate: 55,
-        active: false,
-    },
-    {
-        id: 6,
-        name: 'Hafsa Malik',
-        initials: 'HM',
-        title: 'Historian, NUST',
-        bio: 'History timelines, source analysis, and high-scoring answer structure.',
-        category: 'History',
-        tags: ['History', 'Analysis', 'Essay'],
-        rating: 4.6,
-        sessions: 68,
-        rate: 35,
-        active: true,
-    },
-];
+const getInitials = (name = 'Mentor') => name
+    .split(' ')
+    .map((part) => part[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'ME';
 
-const categories = ['All Mentors', 'Mathematics', 'Computer Science', 'Literature', 'Business', 'Science', 'History'];
+const getMentorTags = (specializedCourses = '') => String(specializedCourses)
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
 const monthNames = [
     'January',
@@ -153,39 +84,74 @@ const Mentorship = () => {
     const [sessionVersion, setSessionVersion] = useState(0);
     const [showInstantModal, setShowInstantModal] = useState(false);
     const [featuredSessions, setFeaturedSessions] = useState([]);
-    const [instructorMentorProfile, setInstructorMentorProfile] = useState(null);
-    const [mentorAvailability, setMentorAvailability] = useState(DEFAULT_WEEKLY_AVAILABILITY);
+    const [mentorProfiles, setMentorProfiles] = useState([]);
+    const [mentorAvailabilityMap, setMentorAvailabilityMap] = useState({});
     const [instantAvailableMentors, setInstantAvailableMentors] = useState([]);
 
-    const featuredSessionCards = useMemo(
-        () => featuredSessions.map((session) => ({
-            ...session,
-            mentor: session.mentorName,
-            topic: session.subject,
-            time: `${session.dateLabel}, ${session.timeSlot}`,
-            canJoinNow: isSessionJoinableNow(session),
-        })),
+    const sessionTimeline = useMemo(
+        () => featuredSessions
+            .map((session) => {
+                const startAt = getSessionStartDateTime(session?.dateLabel, session?.timeSlot);
+                return {
+                    ...session,
+                    startAt,
+                    mentor: session.mentorName,
+                    topic: session.subject,
+                    time: `${session.dateLabel}, ${session.timeSlot}`,
+                    canJoinNow: isSessionJoinableNow(session),
+                };
+            })
+            .filter((session) => Boolean(session.startAt)),
         [featuredSessions]
     );
+
+    const featuredSessionCards = useMemo(() => {
+        const now = new Date();
+        return sessionTimeline
+            .filter((session) => isSessionUpcomingOrJoinableNow(session, now))
+            .sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+    }, [sessionTimeline]);
+
+    const recentSessionCards = useMemo(() => {
+        const now = new Date();
+        return sessionTimeline
+            .filter((session) => isSessionPast(session, now))
+            .sort((a, b) => b.startAt.getTime() - a.startAt.getTime())
+            .slice(0, 3);
+    }, [sessionTimeline]);
 
     useEffect(() => {
         const loadMentorshipData = async () => {
             try {
                 const mentors = await getMentorsForStudents();
-                const firstInstructorMentor = Array.isArray(mentors) && mentors.length > 0 ? mentors[0] : null;
-                setInstructorMentorProfile(firstInstructorMentor || null);
+                const safeMentors = Array.isArray(mentors) ? mentors : [];
+                setMentorProfiles(safeMentors);
 
-                if (firstInstructorMentor?.name) {
-                    const availability = await getMentorAvailabilityByName(firstInstructorMentor.name);
-                    setMentorAvailability(availability);
-                } else {
-                    setMentorAvailability(DEFAULT_WEEKLY_AVAILABILITY);
-                }
+                const availabilityEntries = await Promise.all(
+                    safeMentors
+                        .filter((profile) => Boolean(profile?.name))
+                        .map(async (profile) => {
+                            try {
+                                const availability = await getMentorAvailabilityByName(profile.name);
+                                return [profile.name, availability];
+                            } catch (error) {
+                                return [profile.name, DEFAULT_WEEKLY_AVAILABILITY];
+                            }
+                        })
+                );
+
+                const availabilityByMentorName = {};
+                availabilityEntries.forEach(([mentorName, availability]) => {
+                    availabilityByMentorName[mentorName] = availability;
+                });
+                setMentorAvailabilityMap(availabilityByMentorName);
 
                 const sessions = await getUpcomingSessionsForStudent();
                 setFeaturedSessions(Array.isArray(sessions) ? sessions : []);
             } catch (error) {
                 console.error('Failed to load mentorship data:', error);
+                setMentorProfiles([]);
+                setMentorAvailabilityMap({});
             }
         };
 
@@ -193,40 +159,50 @@ const Mentorship = () => {
     }, [sessionVersion]);
 
     const mentorsForListing = useMemo(() => {
-        if (!instructorMentorProfile?.name) return mentorData;
+        return mentorProfiles
+            .filter((profile) => Boolean(profile?.name))
+            .map((profile) => {
+                const tags = getMentorTags(profile.specializedCourses);
+                const category = tags[0] || 'General';
+                const availability = mentorAvailabilityMap[profile.name] || DEFAULT_WEEKLY_AVAILABILITY;
+                const hasAvailability = Object.values(availability).some(
+                    (slots) => Array.isArray(slots) && slots.length > 0
+                );
 
-        const hasAvailability = Object.values(mentorAvailability).some(
-            (slots) => Array.isArray(slots) && slots.length > 0
+                return {
+                    id: profile._id || profile.mentor || profile.name,
+                    mentorId: profile.mentor || null,
+                    name: profile.name,
+                    initials: getInitials(profile.name),
+                    title: `${category} Mentor`,
+                    bio: profile.description || 'No mentor description provided yet.',
+                    category,
+                    tags: tags.length > 0 ? tags : ['Mentorship'],
+                    rating: typeof profile.rating === 'number' ? profile.rating : null,
+                    sessions: typeof profile.sessionsCount === 'number' ? profile.sessionsCount : null,
+                    rate: typeof profile.rate === 'number' ? profile.rate : null,
+                    active: hasAvailability,
+                    status: profile.status || 'pending',
+                    availability,
+                };
+            });
+    }, [mentorProfiles, mentorAvailabilityMap]);
+
+    const categories = useMemo(() => {
+        const categorySet = new Set(
+            mentorsForListing
+                .map((mentor) => mentor.category)
+                .filter(Boolean)
         );
 
-        const derivedTags = (instructorMentorProfile.specializedCourses || '')
-            .split(',')
-            .map((tag) => tag.trim())
-            .filter(Boolean)
-            .slice(0, 3);
+        return ['All Mentors', ...Array.from(categorySet)];
+    }, [mentorsForListing]);
 
-        const instructorMentor = {
-            id: instructorMentorProfile._id || 999,
-            name: instructorMentorProfile.name,
-            initials: instructorMentorProfile.name
-                .split(' ')
-                .map((part) => part[0])
-                .join('')
-                .slice(0, 2)
-                .toUpperCase() || 'IM',
-            title: 'Instructor Mentor',
-            bio: instructorMentorProfile.description || 'Experienced mentor available for one-on-one sessions.',
-            category: 'Computer Science',
-            tags: derivedTags.length > 0 ? derivedTags : ['Mentorship'],
-            rating: 5.0,
-            sessions: 0,
-            rate: 50,
-            active: hasAvailability,
-        };
-
-        const withoutDuplicate = mentorData.filter((mentor) => mentor.name !== instructorMentor.name);
-        return [instructorMentor, ...withoutDuplicate];
-    }, [instructorMentorProfile, mentorAvailability]);
+    useEffect(() => {
+        if (!categories.includes(activeCategory)) {
+            setActiveCategory('All Mentors');
+        }
+    }, [activeCategory, categories]);
 
     const filteredMentors = useMemo(() => {
         const normalized = query.trim().toLowerCase();
@@ -250,7 +226,7 @@ const Mentorship = () => {
         });
     }, [query, activeCategory, mentorsForListing]);
 
-    const nowContext = useMemo(() => {
+    const buildNowContext = () => {
         const now = new Date();
         const currentSlot = HOURLY_SLOT_OPTIONS[now.getHours()];
         const dateLabel = `${monthNames[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
@@ -260,28 +236,26 @@ const Mentorship = () => {
             currentSlot,
             dateLabel,
         };
-    }, []);
+    };
 
-    const refreshInstantAvailableMentors = async () => {
+    const [nowContext, setNowContext] = useState(() => buildNowContext());
+
+    const refreshInstantAvailableMentors = async (context = buildNowContext()) => {
         try {
             const candidates = mentorsForListing.filter((mentor) => {
-                const isInstructorMentor = mentor.name === instructorMentorProfile?.name;
+                const todaySlots = getSlotsForDateFromAvailability(
+                    mentor.availability,
+                    context.now.getDate(),
+                    context.now.getFullYear(),
+                    context.now.getMonth()
+                );
 
-                const isAvailableNow = isInstructorMentor
-                    ? getSlotsForDateFromAvailability(
-                        mentorAvailability,
-                        nowContext.now.getDate(),
-                        nowContext.now.getFullYear(),
-                        nowContext.now.getMonth()
-                    ).includes(nowContext.currentSlot)
-                    : mentor.active;
-
-                return isAvailableNow;
+                return todaySlots.includes(context.currentSlot);
             });
 
             const busyChecks = await Promise.all(
                 candidates.map(async (mentor) => {
-                    const busy = await isMentorBusyAt(mentor.name, nowContext.dateLabel, nowContext.currentSlot);
+                    const busy = await isMentorBusyAt(mentor.name, context.dateLabel, context.currentSlot);
                     return { mentor, busy };
                 })
             );
@@ -299,7 +273,22 @@ const Mentorship = () => {
         setSelectedTime('');
     };
 
-    const openBookingModal = (mentor) => {
+    const openBookingModal = async (mentor) => {
+        if (mentor?.name && !mentorAvailabilityMap[mentor.name]) {
+            try {
+                const availability = await getMentorAvailabilityByName(mentor.name);
+                setMentorAvailabilityMap((prev) => ({
+                    ...prev,
+                    [mentor.name]: availability,
+                }));
+            } catch (error) {
+                setMentorAvailabilityMap((prev) => ({
+                    ...prev,
+                    [mentor.name]: DEFAULT_WEEKLY_AVAILABILITY,
+                }));
+            }
+        }
+
         setBookingMentor(mentor);
         const now = new Date();
         setViewMonthIndex(now.getMonth());
@@ -309,7 +298,9 @@ const Mentorship = () => {
     };
 
     const handleOpenInstantModal = async () => {
-        await refreshInstantAvailableMentors();
+        const context = buildNowContext();
+        setNowContext(context);
+        await refreshInstantAvailableMentors(context);
         setShowInstantModal(true);
     };
 
@@ -321,7 +312,7 @@ const Mentorship = () => {
         try {
             await createSessionRequest({
                 mentorName: mentor.name,
-                mentorId: mentor.id,
+                mentorId: mentor.mentorId,
                 subject: mentor.category,
                 dateLabel: nowContext.dateLabel,
                 timeSlot: nowContext.currentSlot,
@@ -360,7 +351,7 @@ const Mentorship = () => {
         try {
             await createSessionRequest({
                 mentorName: bookingMentor.name,
-                mentorId: bookingMentor.id,
+                mentorId: bookingMentor.mentorId,
                 subject: bookingMentor.category,
                 dateLabel: `${monthNames[viewMonthIndex]} ${selectedDate}, ${viewYear}`,
                 timeSlot: selectedTime,
@@ -386,9 +377,25 @@ const Mentorship = () => {
         return cells;
     }, [daysInViewMonth, firstWeekdayOfMonth]);
 
+    const selectedMentorAvailability = useMemo(() => {
+        if (!bookingMentor?.name) return DEFAULT_WEEKLY_AVAILABILITY;
+
+        return mentorAvailabilityMap[bookingMentor.name]
+            || bookingMentor.availability
+            || DEFAULT_WEEKLY_AVAILABILITY;
+    }, [bookingMentor, mentorAvailabilityMap]);
+
+    const selectedMentorWeeklySlotsCount = useMemo(
+        () => Object.values(selectedMentorAvailability).reduce(
+            (total, slots) => total + (Array.isArray(slots) ? slots.length : 0),
+            0
+        ),
+        [selectedMentorAvailability]
+    );
+
     const availableSlots = useMemo(
-        () => getSlotsForDateFromAvailability(mentorAvailability, selectedDate, viewYear, viewMonthIndex),
-        [mentorAvailability, selectedDate, viewYear, viewMonthIndex]
+        () => getSlotsForDateFromAvailability(selectedMentorAvailability, selectedDate, viewYear, viewMonthIndex),
+        [selectedMentorAvailability, selectedDate, viewYear, viewMonthIndex]
     );
     const selectedDayKey = useMemo(
         () => getWeekdayKeyFromDate(selectedDate, viewYear, viewMonthIndex),
@@ -443,9 +450,6 @@ const Mentorship = () => {
                         <div className="flex items-start">
                             <button className="relative p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-colors">
                                 <Bell className="w-5 h-5 text-gray-200" />
-                                <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] grid place-items-center border border-gray-900">
-                                    2
-                                </span>
                             </button>
                         </div>
                     </div>
@@ -518,9 +522,15 @@ const Mentorship = () => {
                                                 />
                                             </div>
 
-                                            <div className="px-3 py-1.5 rounded-xl bg-yellow-500/20 border border-yellow-400/30 text-yellow-200 font-semibold flex items-center gap-1 text-sm">
-                                                <Star className="w-4 h-4 fill-current" /> {mentor.rating}
-                                            </div>
+                                            {mentor.rating !== null ? (
+                                                <div className="px-3 py-1.5 rounded-xl bg-yellow-500/20 border border-yellow-400/30 text-yellow-200 font-semibold flex items-center gap-1 text-sm">
+                                                    <Star className="w-4 h-4 fill-current" /> {mentor.rating}
+                                                </div>
+                                            ) : (
+                                                <div className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 font-semibold text-sm capitalize">
+                                                    {mentor.status}
+                                                </div>
+                                            )}
                                         </div>
 
                                         <h3 className="text-2xl font-bold text-white leading-tight">{mentor.name}</h3>
@@ -541,10 +551,14 @@ const Mentorship = () => {
                                         <div className="mt-4 pt-4 border-t border-white/10 flex items-end justify-between gap-3">
                                             <div>
                                                 <div className="text-gray-400 text-xs">Rate</div>
-                                                <div className="text-2xl font-bold text-white">
-                                                    ${mentor.rate}
-                                                    <span className="text-base text-gray-400 font-medium">/hr</span>
-                                                </div>
+                                                {mentor.rate !== null ? (
+                                                    <div className="text-2xl font-bold text-white">
+                                                        ${mentor.rate}
+                                                        <span className="text-base text-gray-400 font-medium">/hr</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm font-semibold text-gray-300">Not specified</div>
+                                                )}
                                             </div>
 
                                             <div className="flex items-center gap-2">
@@ -584,9 +598,15 @@ const Mentorship = () => {
                                                     <span className="flex items-center gap-1">
                                                         <CalendarDays className="w-3.5 h-3.5" /> {item.time}
                                                     </span>
-                                                    <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
-                                                        Scheduled
-                                                    </span>
+                                                    {item.canJoinNow ? (
+                                                        <span className="px-2 py-1 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-300">
+                                                            Live Now
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                                                            Scheduled
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 {item.canJoinNow && (
                                                     <button
@@ -607,6 +627,27 @@ const Mentorship = () => {
                                 </div>
 
                                 <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-lg p-6">
+                                    <h3 className="text-xl font-bold text-white mb-4">Recent Sessions (Top 3)</h3>
+                                    <div className="space-y-3">
+                                        {recentSessionCards.map((session) => (
+                                            <div
+                                                key={`recent-${session._id || session.id || session.time}`}
+                                                className="rounded-xl border border-white/10 bg-white/5 p-4"
+                                            >
+                                                <div className="text-white font-semibold">{session.mentor}</div>
+                                                <div className="text-sm text-purple-300 mt-1">{session.topic}</div>
+                                                <div className="mt-2 text-xs text-gray-300">{session.time}</div>
+                                            </div>
+                                        ))}
+                                        {recentSessionCards.length === 0 && (
+                                            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
+                                                No recent sessions yet.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-lg p-6">
                                     <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
                                     <div className="space-y-3">
                                         <button
@@ -614,9 +655,6 @@ const Mentorship = () => {
                                             className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 flex items-center justify-center gap-2 hover:from-blue-600 hover:to-purple-700 transition-all"
                                         >
                                             <Video className="w-4 h-4" /> Start Instant Session
-                                        </button>
-                                        <button className="w-full rounded-xl bg-white/10 border border-white/10 text-gray-200 py-3 flex items-center justify-center gap-2 hover:bg-white/20 transition-colors">
-                                            <Clock3 className="w-4 h-4" /> View Session History
                                         </button>
                                     </div>
                                 </div>
@@ -651,7 +689,7 @@ const Mentorship = () => {
                                     <p className="text-gray-600 text-xl mt-1">{bookingMentor.title}</p>
                                     <p className="mt-2 px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-600 text-lg font-semibold inline-flex items-center gap-2">
                                         <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                        Available Now
+                                        {selectedMentorWeeklySlotsCount > 0 ? 'Availability Set' : 'Availability Not Set'}
                                     </p>
                                     <p className="mt-5 text-gray-600 max-w-lg text-[22px] leading-relaxed">{bookingMentor.bio}</p>
 
@@ -669,23 +707,18 @@ const Mentorship = () => {
 
                                 <div className="mt-6 grid grid-cols-2 gap-3">
                                     <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                        <div className="text-gray-500 text-base">Rating</div>
-                                        <div className="text-4xl font-bold text-gray-800 flex items-center gap-2 mt-1">
-                                            <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" /> {bookingMentor.rating}
-                                        </div>
-                                        <div className="text-gray-500 text-lg">({bookingMentor.sessions})</div>
+                                        <div className="text-gray-500 text-base">Profile Status</div>
+                                        <div className="text-2xl font-bold text-gray-800 mt-1 capitalize">{bookingMentor.status}</div>
+                                    </div>
+                                    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
+                                        <div className="text-gray-500 text-base">Weekly Slots</div>
+                                        <div className="text-2xl font-bold text-gray-800 mt-1">{selectedMentorWeeklySlotsCount}</div>
                                     </div>
                                     <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
                                         <div className="text-gray-500 text-base">Rate</div>
-                                        <div className="text-4xl font-bold text-gray-800 mt-1">${bookingMentor.rate}/hr</div>
-                                    </div>
-                                    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                        <div className="text-gray-500 text-base">Sessions</div>
-                                        <div className="text-4xl font-bold text-gray-800 mt-1">779+</div>
-                                    </div>
-                                    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                        <div className="text-gray-500 text-base">Response</div>
-                                        <div className="text-4xl font-bold text-gray-800 mt-1">&lt; 2 hrs</div>
+                                        <div className="text-2xl font-bold text-gray-800 mt-1">
+                                            {bookingMentor.rate !== null ? `$${bookingMentor.rate}/hr` : 'Not specified'}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -714,7 +747,7 @@ const Mentorship = () => {
                                             const now = new Date();
                                             const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                                             const isPastDay = dayDate < todayStart;
-                                            const daySlots = getSlotsForDateFromAvailability(mentorAvailability, day, viewYear, viewMonthIndex);
+                                            const daySlots = getSlotsForDateFromAvailability(selectedMentorAvailability, day, viewYear, viewMonthIndex);
                                             const isAvailableDay = daySlots.length > 0 && !isPastDay;
                                             const activeDay = selectedDate === day;
 

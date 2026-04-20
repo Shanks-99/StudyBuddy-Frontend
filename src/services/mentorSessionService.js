@@ -79,6 +79,26 @@ export const isSessionJoinableNow = (session, now = new Date()) => {
     return now >= start && now <= end;
 };
 
+export const getSessionEndDateTime = (session) => {
+    const start = getSessionStartDateTime(session?.dateLabel, session?.timeSlot);
+    if (!start) return null;
+    return new Date(start.getTime() + 60 * 60 * 1000);
+};
+
+export const isSessionUpcomingOrJoinableNow = (session, now = new Date()) => {
+    const start = getSessionStartDateTime(session?.dateLabel, session?.timeSlot);
+    const end = getSessionEndDateTime(session);
+    if (!start || !end) return false;
+
+    return start > now || (now >= start && now <= end);
+};
+
+export const isSessionPast = (session, now = new Date()) => {
+    const end = getSessionEndDateTime(session);
+    if (!end) return false;
+    return end < now;
+};
+
 export const getMentorshipCallRoomId = (session) => {
     const base = session?.requestId || session?.id || session?._id;
     if (!base) return null;
