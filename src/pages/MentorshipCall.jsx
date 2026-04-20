@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
-import { Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
 
 const isLocalhost =
     typeof window !== 'undefined' &&
@@ -56,6 +56,7 @@ const MentorshipCall = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isAudioMuted, setIsAudioMuted] = useState(false);
     const [isVideoMuted, setIsVideoMuted] = useState(false);
+    const [isScreenSharing, setIsScreenSharing] = useState(false);
     const [hasRemoteStream, setHasRemoteStream] = useState(false);
     const [hasLocalStream, setHasLocalStream] = useState(false);
     const [mediaError, setMediaError] = useState('');
@@ -65,6 +66,10 @@ const MentorshipCall = () => {
     const remoteVideoRef = useRef(null);
     const peerRef = useRef(null);
     const streamRef = useRef(null);
+    const cameraStreamRef = useRef(null);
+    const localPreviewStreamRef = useRef(null);
+    const screenStreamRef = useRef(null);
+    const activeVideoTrackRef = useRef(null);
     const pendingSignalsRef = useRef([]);
     const queuedIceSignalsRef = useRef({});
     const remoteSocketIdRef = useRef(null);
@@ -75,14 +80,15 @@ const MentorshipCall = () => {
     const otherParticipant = participants.find((item) => item.socketId !== socketRef.current?.id);
 
     useEffect(() => {
-        if (!localVideoRef.current || !streamRef.current) return;
+        const previewStream = localPreviewStreamRef.current || streamRef.current;
+        if (!localVideoRef.current || !previewStream) return;
 
-        if (localVideoRef.current.srcObject !== streamRef.current) {
-            localVideoRef.current.srcObject = streamRef.current;
+        if (localVideoRef.current.srcObject !== previewStream) {
+            localVideoRef.current.srcObject = previewStream;
         }
 
         localVideoRef.current.play().catch(() => {});
-    }, [isLoading, hasLocalStream]);
+    }, [isLoading, hasLocalStream, isScreenSharing]);
 
     const cleanupPeer = () => {
         if (peerRef.current && !peerRef.current.destroyed) {
@@ -278,10 +284,25 @@ const MentorshipCall = () => {
 
     const leaveCall = () => {
         cleanupPeer();
+        if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach((track) => {
+                track.onended = null;
+                track.stop();
+            });
+            screenStreamRef.current = null;
+        }
+        setIsScreenSharing(false);
+
+        if (cameraStreamRef.current) {
+            cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+            cameraStreamRef.current = null;
+        }
+
         if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
             streamRef.current = null;
         }
+        localPreviewStreamRef.current = null;
+        activeVideoTrackRef.current = null;
         setHasLocalStream(false);
         if (socketRef.current) {
             socketRef.current.disconnect();
@@ -335,34 +356,170 @@ const MentorshipCall = () => {
         return peer;
     };
 
-    const requestLocalMedia = async () => {
+    const applyOutgoingVideoTrack = async (videoTrack, sourceStream) => {
+        if (!videoTrack || !peerRef.current || peerRef.current.destroyed) return;
+
+        const peerConnection = peerRef.current._pc;
+        const videoSender = peerConnection
+            ?.getSenders?.()
+            .find((sender) => sender.track?.kind === 'video');
+
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            streamRef.current = stream;
+            if (videoSender) {
+                await videoSender.replaceTrack(videoTrack);
+                return;
+            }
+
+            peerRef.current.addTrack(videoTrack, sourceStream || new MediaStream([videoTrack]));
+        } catch (error) {
+            console.error('[MentorshipCall] Failed to apply outgoing video track:', error?.message || error);
+        }
+    };
+
+    const stopScreenShare = async () => {
+        if (!screenStreamRef.current && !isScreenSharing) return;
+
+        const cameraTrack = cameraStreamRef.current?.getVideoTracks?.()[0] || null;
+        if (cameraTrack) {
+            await applyOutgoingVideoTrack(cameraTrack, cameraStreamRef.current);
+            activeVideoTrackRef.current = cameraTrack;
+            localPreviewStreamRef.current = cameraStreamRef.current;
+
+            if (localVideoRef.current && localVideoRef.current.srcObject !== cameraStreamRef.current) {
+                localVideoRef.current.srcObject = cameraStreamRef.current;
+            }
+            localVideoRef.current?.play().catch(() => {});
+
             setHasLocalStream(true);
+            setIsVideoMuted(!cameraTrack.enabled);
+        } else {
+            activeVideoTrackRef.current = null;
+            localPreviewStreamRef.current = null;
+            setHasLocalStream(false);
+        }
+
+        if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach((track) => {
+                track.onended = null;
+                track.stop();
+            });
+            screenStreamRef.current = null;
+        }
+
+        setIsScreenSharing(false);
+    };
+
+    const startScreenShare = async () => {
+        if (!navigator.mediaDevices?.getDisplayMedia) {
+            setMediaError('Screen sharing is not supported in this browser.');
+            return;
+        }
+
+        try {
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: false,
+            });
+
+            const displayTrack = displayStream.getVideoTracks()[0];
+            if (!displayTrack) {
+                displayStream.getTracks().forEach((track) => track.stop());
+                return;
+            }
+
+            await applyOutgoingVideoTrack(displayTrack, displayStream);
+
+            activeVideoTrackRef.current = displayTrack;
+            localPreviewStreamRef.current = displayStream;
+            screenStreamRef.current = displayStream;
+            setHasLocalStream(true);
+            setIsScreenSharing(true);
+            setIsVideoMuted(!displayTrack.enabled);
             setMediaError('');
 
             if (localVideoRef.current) {
-                localVideoRef.current.srcObject = stream;
+                localVideoRef.current.srcObject = displayStream;
+                localVideoRef.current.play().catch(() => {});
             }
 
-            if (peerRef.current && !peerRef.current.destroyed) {
-                const existingSenders = peerRef.current._pc?.getSenders?.() || [];
-                const existingTrackIds = new Set(existingSenders.map((sender) => sender.track?.id).filter(Boolean));
+            displayTrack.onended = () => {
+                stopScreenShare();
+            };
+        } catch (error) {
+            if (error?.name !== 'NotAllowedError') {
+                console.error('[MentorshipCall] Screen share error:', error?.message || error);
+            }
+        }
+    };
 
-                stream.getTracks().forEach((track) => {
-                    if (existingTrackIds.has(track.id)) return;
+    const toggleScreenShare = async () => {
+        if (isScreenSharing) {
+            await stopScreenShare();
+            return;
+        }
+
+        await startScreenShare();
+    };
+
+    const requestLocalMedia = async () => {
+        try {
+            const previousCameraStream = cameraStreamRef.current;
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+
+            const newVideoTrack = stream.getVideoTracks()[0] || null;
+            const newAudioTrack = stream.getAudioTracks()[0] || null;
+
+            cameraStreamRef.current = stream;
+            streamRef.current = stream;
+            setMediaError('');
+            setHasLocalStream(Boolean(newVideoTrack));
+
+            if (!isScreenSharing) {
+                localPreviewStreamRef.current = stream;
+                activeVideoTrackRef.current = newVideoTrack;
+                if (localVideoRef.current) {
+                    localVideoRef.current.srcObject = stream;
+                }
+            }
+
+            setIsVideoMuted(newVideoTrack ? !newVideoTrack.enabled : false);
+
+
+            if (peerRef.current && !peerRef.current.destroyed) {
+                const peerConnection = peerRef.current._pc;
+
+                if (newAudioTrack) {
+                    const audioSender = peerConnection
+                        ?.getSenders?.()
+                        .find((sender) => sender.track?.kind === 'audio');
+
                     try {
-                        peerRef.current.addTrack(track, stream);
+                        if (audioSender) {
+                            await audioSender.replaceTrack(newAudioTrack);
+                        } else {
+                            peerRef.current.addTrack(newAudioTrack, stream);
+                        }
                     } catch (error) {
-                        // Ignore addTrack errors for already-negotiated tracks
+                        console.error('[MentorshipCall] Failed to apply outgoing audio track:', error?.message || error);
                     }
-                });
+                }
+
+                if (newVideoTrack && !isScreenSharing) {
+                    await applyOutgoingVideoTrack(newVideoTrack, stream);
+                }
+            }
+
+            if (previousCameraStream && previousCameraStream !== stream) {
+                previousCameraStream.getTracks().forEach((track) => track.stop());
             }
 
             return true;
         } catch (error) {
             setHasLocalStream(false);
+            if (!isScreenSharing) {
+                localPreviewStreamRef.current = null;
+                activeVideoTrackRef.current = null;
+            }
             setMediaError('Camera or microphone permission is blocked/unavailable. Click Retry Camera after allowing access.');
             return false;
         }
@@ -453,10 +610,24 @@ const MentorshipCall = () => {
 
         return () => {
             cleanupPeer();
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach((track) => track.stop());
-                streamRef.current = null;
+
+            if (screenStreamRef.current) {
+                screenStreamRef.current.getTracks().forEach((track) => {
+                    track.onended = null;
+                    track.stop();
+                });
+                screenStreamRef.current = null;
             }
+
+            if (cameraStreamRef.current) {
+                cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+                cameraStreamRef.current = null;
+            }
+
+            streamRef.current = null;
+            localPreviewStreamRef.current = null;
+            activeVideoTrackRef.current = null;
+            setIsScreenSharing(false);
             setHasLocalStream(false);
             socket.off('room-users');
             socket.off('user-left');
@@ -467,14 +638,15 @@ const MentorshipCall = () => {
     }, [callId, navigate, user]);
 
     const toggleAudio = () => {
-        const audioTrack = streamRef.current?.getAudioTracks?.()[0];
+        const audioTrack = cameraStreamRef.current?.getAudioTracks?.()[0]
+            || streamRef.current?.getAudioTracks?.()[0];
         if (!audioTrack) return;
         audioTrack.enabled = !audioTrack.enabled;
         setIsAudioMuted(!audioTrack.enabled);
     };
 
     const toggleVideo = () => {
-        const videoTrack = streamRef.current?.getVideoTracks?.()[0];
+        const videoTrack = activeVideoTrackRef.current || streamRef.current?.getVideoTracks?.()[0];
         if (!videoTrack) return;
         videoTrack.enabled = !videoTrack.enabled;
         setIsVideoMuted(!videoTrack.enabled);
@@ -489,11 +661,11 @@ const MentorshipCall = () => {
     }
 
     return (
-        <div className="h-screen bg-gray-950 text-white flex flex-col">
-            <div className="px-6 py-4 border-b border-white/10 bg-black/30 flex items-center justify-between">
+        <div className="h-[100dvh] w-full bg-gray-950 text-white flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-white/10 bg-black/30 flex items-center justify-between shrink-0">
                 <div>
                     <h1 className="text-xl font-bold">Mentorship Session Call</h1>
-                    <p className="text-sm text-gray-400">Two-person video call room</p>
+                    <p className="text-sm text-gray-400">1 to 1 Mentorship Session</p>
                 </div>
                 <button
                     onClick={leaveCall}
@@ -503,7 +675,7 @@ const MentorshipCall = () => {
                 </button>
             </div>
 
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+            <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
                 <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gray-900">
                     <video ref={localVideoRef} muted autoPlay playsInline className="w-full h-full object-cover" />
                     {!hasLocalStream && (
@@ -547,7 +719,7 @@ const MentorshipCall = () => {
                 </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-white/10 bg-black/30 flex items-center justify-center gap-4">
+            <div className="px-6 py-4 border-t border-white/10 bg-gray-950/95 backdrop-blur shrink-0 flex items-center justify-center gap-4">
                 <button
                     onClick={toggleAudio}
                     className={`w-12 h-12 rounded-full flex items-center justify-center ${
@@ -563,6 +735,15 @@ const MentorshipCall = () => {
                     }`}
                 >
                     {isVideoMuted ? <VideoOff className="w-5 h-5" /> : <VideoIcon className="w-5 h-5" />}
+                </button>
+                <button
+                    onClick={toggleScreenShare}
+                    title={isScreenSharing ? 'Stop screen sharing' : 'Share your screen'}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        isScreenSharing ? 'bg-blue-600 hover:bg-blue-700' : 'bg-white/10 hover:bg-white/20'
+                    }`}
+                >
+                    {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
                 </button>
                 <button
                     onClick={leaveCall}
