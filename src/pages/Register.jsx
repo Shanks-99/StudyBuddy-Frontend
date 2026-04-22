@@ -1,9 +1,26 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserPlus, Mail, Lock, User, Briefcase } from 'lucide-react';
-import Input from '../components/ui/Input';
-import Button from '../components/ui/Button';
+import { motion, useReducedMotion } from 'framer-motion';
+import { Mail, Lock, User, CheckCircle, GraduationCap, Briefcase, ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import { register } from '../services/authService';
+
+const fadeInUp = {
+    initial: { opacity: 0, y: 30 },
+    animate: { opacity: 1, y: 0 },
+};
+
+const staggerContainer = {
+    animate: {
+        transition: {
+            staggerChildren: 0.1,
+        },
+    },
+};
+
+const scaleIn = {
+    initial: { opacity: 0, scale: 0.95 },
+    animate: { opacity: 1, scale: 1 },
+};
 
 const Register = () => {
     const [formData, setFormData] = useState({
@@ -14,7 +31,9 @@ const Register = () => {
     });
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const navigate = useNavigate();
+    const prefersReducedMotion = useReducedMotion();
 
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -22,6 +41,7 @@ const Register = () => {
     };
 
     const validateName = (name) => {
+        // Check if name contains numbers or special characters
         const nameRegex = /^[a-zA-Z\s]+$/;
         return nameRegex.test(name);
     };
@@ -29,6 +49,7 @@ const Register = () => {
     const validateForm = () => {
         const newErrors = {};
 
+        // Name validation
         if (!formData.name.trim()) {
             newErrors.name = 'Full name is required';
         } else if (formData.name.trim().length < 2) {
@@ -37,12 +58,14 @@ const Register = () => {
             newErrors.name = 'Name should not contain numbers or special characters';
         }
 
+        // Email validation
         if (!formData.email.trim()) {
             newErrors.email = 'Email is required';
         } else if (!validateEmail(formData.email)) {
             newErrors.email = 'Invalid email';
         }
 
+        // Password validation
         if (!formData.password) {
             newErrors.password = 'Password is required';
         } else if (formData.password.length < 6) {
@@ -59,6 +82,7 @@ const Register = () => {
         const { name, value } = e.target;
         setFormData({ ...formData, [name]: value });
 
+        // Real-time validation for name field
         if (name === 'name' && value.trim()) {
             if (!validateName(value)) {
                 setErrors({ ...errors, name: 'Name should not contain numbers or special characters' });
@@ -66,9 +90,11 @@ const Register = () => {
                 setErrors({ ...errors, name: '' });
             }
         } else if (errors[name]) {
+            // Clear error for other fields when user starts typing
             setErrors({ ...errors, [name]: '' });
         }
 
+        // Clear API error when user modifies input
         if (apiError) {
             setApiError('');
         }
@@ -82,24 +108,18 @@ const Register = () => {
         e.preventDefault();
         setApiError('');
 
+        // Frontend validation
         if (!validateForm()) {
             return;
         }
 
         setIsSubmitting(true);
         try {
-            setIsSubmitting(true);
-            const response = await register(formData);
-
-            if (response.requiresVerification) {
-                setVerificationEmail(response.email);
-                setStep(2);
-                setResendCooldown(RESEND_COOLDOWN);
-            } else {
-                navigate('/login');
-            }
+            await register(formData);
+            navigate('/login');
         } catch (err) {
             setApiError(err.response?.data?.msg || 'Registration failed. Please try again.');
+            setIsSubmitting(false);
         }
     };
 
@@ -158,240 +178,6 @@ const Register = () => {
         );
     };
 
-    // OTP input handlers
-    const handleOtpChange = useCallback((index, value) => {
-        if (value.length > 1) {
-            // Handle paste
-            const digits = value.replace(/\D/g, '').slice(0, 6);
-            const newOtp = [...otpValues];
-            for (let i = 0; i < 6; i++) {
-                newOtp[i] = digits[i] || '';
-            }
-            setOtpValues(newOtp);
-            setOtpError('');
-
-            // Focus last filled input or the next empty one
-            const focusIdx = Math.min(digits.length, 5);
-            otpInputRefs.current[focusIdx]?.focus();
-            return;
-        }
-
-        if (!/^\d*$/.test(value)) return; // Only digits
-
-        const newOtp = [...otpValues];
-        newOtp[index] = value;
-        setOtpValues(newOtp);
-        setOtpError('');
-
-        // Auto-focus next input
-        if (value && index < 5) {
-            otpInputRefs.current[index + 1]?.focus();
-        }
-    }, [otpValues]);
-
-    const handleOtpKeyDown = useCallback((index, e) => {
-        if (e.key === 'Backspace' && !otpValues[index] && index > 0) {
-            otpInputRefs.current[index - 1]?.focus();
-        }
-    }, [otpValues]);
-
-    const handleVerifyCode = async () => {
-        const code = otpValues.join('');
-        if (code.length !== 6) {
-            setOtpError('Please enter the complete 6-digit code');
-            return;
-        }
-
-        try {
-            setIsVerifying(true);
-            setOtpError('');
-            await verifyRegistrationCode({ email: verificationEmail, code });
-            setVerificationSuccess(true);
-
-            // Redirect to login after 2 seconds
-            setTimeout(() => {
-                navigate('/login');
-            }, 2000);
-        } catch (err) {
-            setOtpError(err.response?.data?.msg || 'Verification failed. Please try again.');
-        } finally {
-            setIsVerifying(false);
-        }
-    };
-
-    const handleResendCode = async () => {
-        if (resendCooldown > 0 || isResending) return;
-
-        try {
-            setIsResending(true);
-            setOtpError('');
-            await resendVerificationCode({ email: verificationEmail });
-            setResendCooldown(RESEND_COOLDOWN);
-            setOtpValues(['', '', '', '', '', '']);
-            otpInputRefs.current[0]?.focus();
-        } catch (err) {
-            const retryAfter = err.response?.data?.retryAfter;
-            if (retryAfter) {
-                setResendCooldown(retryAfter);
-            }
-            setOtpError(err.response?.data?.msg || 'Failed to resend code. Please try again.');
-        } finally {
-            setIsResending(false);
-        }
-    };
-
-    const handleBackToForm = () => {
-        setStep(1);
-        setOtpValues(['', '', '', '', '', '']);
-        setOtpError('');
-        setVerificationSuccess(false);
-    };
-
-    const handleGoogleSuccess = async (credentialResponse) => {
-        setApiError('');
-
-        if (!credentialResponse?.credential) {
-            setApiError('Google registration failed. No token received.');
-            return;
-        }
-
-        try {
-            setIsGoogleLoading(true);
-            const expectedRole = formData.role === 'teacher' ? 'teacher' : 'student';
-
-            const response = await loginWithGoogle({
-                idToken: credentialResponse.credential,
-                role: expectedRole,
-            });
-
-            if (response.role !== expectedRole) {
-                setApiError(getRoleMismatchMessage(response.role));
-                return;
-            }
-
-            navigateByRole(response.role);
-        } catch (err) {
-            setApiError(err.response?.data?.msg || 'Google registration failed. Please try again.');
-        } finally {
-            setIsGoogleLoading(false);
-        }
-    };
-
-    // ==================== OTP VERIFICATION SCREEN ====================
-    if (step === 2) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-400 to-purple-500">
-                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-8 shadow-2xl w-full max-w-md border border-white/20">
-                    {/* Back button */}
-                    <button
-                        onClick={handleBackToForm}
-                        className="flex items-center gap-1.5 text-blue-100 hover:text-white text-sm font-medium mb-6 transition group"
-                    >
-                        <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-                        Back to registration
-                    </button>
-
-                    {/* Header */}
-                    <div className="text-center mb-8">
-                        <div className="bg-white/20 p-3 rounded-full inline-block mb-4">
-                            <ShieldCheck className="w-8 h-8 text-white" />
-                        </div>
-                        <h2 className="text-3xl font-bold text-white">Verify Your Email</h2>
-                        <p className="text-blue-100 mt-2">
-                            We've sent a 6-digit code to
-                        </p>
-                        <p className="text-white font-semibold mt-1 text-sm bg-white/10 rounded-lg px-3 py-1.5 inline-block">
-                            {verificationEmail}
-                        </p>
-                    </div>
-
-                    {verificationSuccess ? (
-                        /* Success state */
-                        <div className="text-center">
-                            <div className="bg-green-500/20 border border-green-400 rounded-xl p-6 mb-4">
-                                <div className="text-4xl mb-3">✅</div>
-                                <h3 className="text-white text-lg font-bold mb-1">Email Verified!</h3>
-                                <p className="text-green-100 text-sm">Redirecting to login...</p>
-                            </div>
-                        </div>
-                    ) : (
-                        <>
-                            {/* OTP error */}
-                            {otpError && (
-                                <div className="bg-red-500/20 border border-red-500 text-white px-4 py-2 rounded-lg mb-4 text-center text-sm">
-                                    {otpError}
-                                </div>
-                            )}
-
-                            {/* OTP Input Boxes */}
-                            <div className="flex justify-center gap-2.5 mb-6">
-                                {otpValues.map((digit, index) => (
-                                    <input
-                                        key={index}
-                                        ref={(el) => (otpInputRefs.current[index] = el)}
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={index === 0 ? 6 : 1}
-                                        value={digit}
-                                        onChange={(e) => handleOtpChange(index, e.target.value)}
-                                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                                        className={`w-12 h-14 text-center text-xl font-bold rounded-xl border-2 outline-none transition-all duration-200
-                                            ${digit
-                                                ? 'border-indigo-400 bg-white text-indigo-700 shadow-lg shadow-indigo-500/20'
-                                                : 'border-white/30 bg-white/10 text-white'
-                                            }
-                                            focus:border-indigo-400 focus:bg-white focus:text-indigo-700 focus:shadow-lg focus:shadow-indigo-500/30
-                                            hover:border-white/50`}
-                                        autoComplete="one-time-code"
-                                    />
-                                ))}
-                            </div>
-
-                            {/* Verify Button */}
-                            <button
-                                onClick={handleVerifyCode}
-                                disabled={isVerifying || otpValues.join('').length !== 6}
-                                className={`w-full py-3 rounded-xl text-sm font-bold text-white shadow transition-all duration-200 mb-4
-                                    ${isVerifying || otpValues.join('').length !== 6
-                                        ? 'bg-gray-400/50 cursor-not-allowed'
-                                        : 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 hover:shadow-lg hover:shadow-green-500/25'
-                                    }`}
-                            >
-                                {isVerifying ? (
-                                    <span className="flex items-center justify-center gap-2">
-                                        <RefreshCw className="w-4 h-4 animate-spin" />
-                                        Verifying...
-                                    </span>
-                                ) : (
-                                    'Verify & Continue'
-                                )}
-                            </button>
-
-                            {/* Resend section */}
-                            <div className="text-center">
-                                <p className="text-blue-100 text-sm mb-2">Didn't receive the code?</p>
-                                {resendCooldown > 0 ? (
-                                    <p className="text-white/60 text-sm">
-                                        Resend available in <span className="font-bold text-white">{resendCooldown}s</span>
-                                    </p>
-                                ) : (
-                                    <button
-                                        onClick={handleResendCode}
-                                        disabled={isResending}
-                                        className="text-white font-semibold text-sm hover:text-blue-200 underline underline-offset-2 transition disabled:opacity-50"
-                                    >
-                                        {isResending ? 'Sending...' : 'Resend Code'}
-                                    </button>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-        );
-    }
-
-    // ==================== REGISTRATION FORM (Step 1) ====================
     return (
         <main className="min-h-screen bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white px-4 py-12 flex flex-col items-center justify-center transition-colors duration-300 relative overflow-hidden font-sans">
             
@@ -493,17 +279,25 @@ const Register = () => {
                         </div>
                     </div>
 
-                    <Button type="submit" variant="primary" className="mb-4">
-                        Register
-                    </Button>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className={`w-full mt-4 py-4 rounded-xl font-bold shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 ${roleConfig[formData.role].buttonBg}`}
+                    >
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="animate-spin h-5 w-5" /> Creating Account...
+                            </>
+                        ) : (
+                            `Join as ${roleConfig[formData.role].title}`
+                        )}
+                    </button>
 
-                    <div className="text-center mt-4">
-                        <p className="text-white">
-                            Already have an account?{' '}
-                            <Link to="/login" className="text-blue-200 hover:text-white font-semibold underline">
-                                Login
-                            </Link>
-                        </p>
+                    <div className="text-center text-sm font-medium text-slate-500 dark:text-gray-400 mt-6">
+                        Already have an account?{" "}
+                        <Link to="/login" className="text-purple-600 dark:text-[#8c30e8] hover:underline font-bold">
+                            Log in
+                        </Link>
                     </div>
                 </form>
             </motion.div>
