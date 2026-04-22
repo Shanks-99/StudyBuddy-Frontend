@@ -10,10 +10,7 @@
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.13.2",
     "buffer": "^6.0.3",
-<<<<<<< HEAD
-=======
     "clsx": "^2.1.1",
->>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
     "framer-motion": "^12.38.0",
     "localtunnel": "^2.0.2",
     "lucide-react": "^0.554.0",

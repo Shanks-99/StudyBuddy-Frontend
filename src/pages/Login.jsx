@@ -36,6 +36,19 @@ const Login = () => {
     const navigate = useNavigate();
     const prefersReducedMotion = useReducedMotion();
 
+    const navigateByRole = (role) => {
+        if (role === 'teacher') {
+            navigate('/instructor-dashboard');
+        } else {
+            navigate('/student-dashboard');
+        }
+    };
+
+    const toggleRole = () => {
+        setIsTeacher((prev) => !prev);
+        setApiError('');
+    };
+
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
@@ -108,33 +121,9 @@ const Login = () => {
         }
     };
 
+    // Google login placeholder - requires @react-oauth/google setup
     const handleGoogleSuccess = async (credentialResponse) => {
-        setApiError('');
-
-        if (!credentialResponse?.credential) {
-            setApiError('Google login failed. No token received.');
-            return;
-        }
-
-        try {
-            setIsGoogleLoading(true);
-            const expectedRole = isTeacher ? 'teacher' : 'student';
-            const response = await loginWithGoogle({
-                idToken: credentialResponse.credential,
-                role: expectedRole,
-            });
-
-            if (response.role !== expectedRole) {
-                setApiError(getRoleMismatchMessage(response.role));
-                return;
-            }
-
-            navigateByRole(response.role);
-        } catch (err) {
-            setApiError(err.response?.data?.msg || 'Google login failed. Please try again.');
-        } finally {
-            setIsGoogleLoading(false);
-        }
+        setApiError('Google login is not configured yet.');
     };
 
     return (

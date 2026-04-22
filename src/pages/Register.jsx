@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { UserPlus, Mail, Lock, User, Briefcase } from 'lucide-react';
+import { motion } from 'framer-motion';
+import {
+    UserPlus, Mail, Lock, User, Briefcase,
+    GraduationCap, CheckCircle, ArrowLeft, ShieldCheck, RefreshCw, AlertCircle
+} from 'lucide-react';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { register } from '../services/authService';
+import { register, verifyRegistrationCode, resendVerificationCode } from '../services/authService';
 
 const Register = () => {
     const [formData, setFormData] = useState({
@@ -14,7 +18,26 @@ const Register = () => {
     });
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState('');
+    const [step, setStep] = useState(1);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [verificationEmail, setVerificationEmail] = useState('');
+    const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
+    const [otpError, setOtpError] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [verificationSuccess, setVerificationSuccess] = useState(false);
+    const [isResending, setIsResending] = useState(false);
+    const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+    const RESEND_COOLDOWN = 60;
+    const [resendCooldown, setResendCooldown] = useState(0);
+    const otpInputRefs = useRef([]);
     const navigate = useNavigate();
+
+    // Resend cooldown timer
+    useEffect(() => {
+        if (resendCooldown <= 0) return;
+        const timer = setTimeout(() => setResendCooldown((prev) => prev - 1), 1000);
+        return () => clearTimeout(timer);
+    }, [resendCooldown]);
 
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -88,7 +111,6 @@ const Register = () => {
 
         setIsSubmitting(true);
         try {
-            setIsSubmitting(true);
             const response = await register(formData);
 
             if (response.requiresVerification) {
@@ -100,6 +122,8 @@ const Register = () => {
             }
         } catch (err) {
             setApiError(err.response?.data?.msg || 'Registration failed. Please try again.');
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -247,34 +271,9 @@ const Register = () => {
         setVerificationSuccess(false);
     };
 
+    // Google registration placeholder
     const handleGoogleSuccess = async (credentialResponse) => {
-        setApiError('');
-
-        if (!credentialResponse?.credential) {
-            setApiError('Google registration failed. No token received.');
-            return;
-        }
-
-        try {
-            setIsGoogleLoading(true);
-            const expectedRole = formData.role === 'teacher' ? 'teacher' : 'student';
-
-            const response = await loginWithGoogle({
-                idToken: credentialResponse.credential,
-                role: expectedRole,
-            });
-
-            if (response.role !== expectedRole) {
-                setApiError(getRoleMismatchMessage(response.role));
-                return;
-            }
-
-            navigateByRole(response.role);
-        } catch (err) {
-            setApiError(err.response?.data?.msg || 'Google registration failed. Please try again.');
-        } finally {
-            setIsGoogleLoading(false);
-        }
+        setApiError('Google registration is not configured yet.');
     };
 
     // ==================== OTP VERIFICATION SCREEN ====================
