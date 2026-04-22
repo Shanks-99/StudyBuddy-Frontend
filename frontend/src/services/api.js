@@ -1,7 +1,20 @@
 import axios from 'axios';
 
+const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const configuredApiUrl = process.env.REACT_APP_API_URL;
+
+const localApiBaseUrl = 'http://localhost:5000/api';
+const remoteApiBaseUrl = 'https://studybuddy-backend-pl2i.onrender.com/api';
+
+const defaultApiBaseUrl = isLocalhost
+    ? localApiBaseUrl
+    : (configuredApiUrl || remoteApiBaseUrl);
+
 const api = axios.create({
-    baseURL: process.env.REACT_APP_API_URL || "https://studybuddy-backend-pl2i.onrender.com/api",
+    baseURL: defaultApiBaseUrl,
     headers: {
         'Content-Type': 'application/json',
     },

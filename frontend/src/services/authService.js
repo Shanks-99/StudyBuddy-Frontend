@@ -1,20 +1,55 @@
 import api from './api';
 
+const persistAuthData = (authPayload) => {
+    if (!authPayload?.token) return;
+
+    localStorage.setItem('token', authPayload.token);
+    localStorage.setItem('user', JSON.stringify({
+        id: authPayload.id || authPayload._id,
+        name: authPayload.name,
+        role: authPayload.role
+    }));
+};
+
 export const register = async (userData) => {
     const response = await api.post('/auth/register', userData);
     return response.data;
 };
 
+export const verifyRegistrationCode = async ({ email, code }) => {
+    const response = await api.post('/auth/verify-code', { email, code });
+    return response.data;
+};
+
+export const resendVerificationCode = async ({ email }) => {
+    const response = await api.post('/auth/resend-code', { email });
+    return response.data;
+};
+
 export const login = async (credentials) => {
     const response = await api.post('/auth/login', credentials);
-    if (response.data.token) {
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('user', JSON.stringify({
-            id: response.data.id || response.data._id, // Add ID here (handling potential key names from backend)
-            name: response.data.name,
-            role: response.data.role
-        }));
-    }
+    persistAuthData(response.data);
+    return response.data;
+};
+
+export const loginWithGoogle = async ({ idToken, role }) => {
+    const response = await api.post('/auth/google', { idToken, role });
+    persistAuthData(response.data);
+    return response.data;
+};
+
+export const forgotPassword = async ({ email }) => {
+    const response = await api.post('/auth/forgot-password', { email });
+    return response.data;
+};
+
+export const verifyResetCode = async ({ email, code }) => {
+    const response = await api.post('/auth/verify-reset-code', { email, code });
+    return response.data;
+};
+
+export const resetPassword = async ({ email, code, newPassword }) => {
+    const response = await api.post('/auth/reset-password', { email, code, newPassword });
     return response.data;
 };
 

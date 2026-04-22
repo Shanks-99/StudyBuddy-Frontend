@@ -12,10 +12,17 @@ import {
     Video as VideoIcon,
     VideoOff,
     LogOut,
-    Loader2
+    Loader2,
+    Sparkles
 } from 'lucide-react';
 
-const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || 'https://studybuddy-backend-pl2i.onrender.com';
+const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || (isLocalhost
+    ? 'http://localhost:5000'
+    : 'https://studybuddy-backend-pl2i.onrender.com');
 
 const ActiveStudyRoom = () => {
     const { roomId } = useParams();
@@ -39,6 +46,7 @@ const ActiveStudyRoom = () => {
     const socketRef = useRef();
     const userVideoRef = useRef();
     const peersRef = useRef([]); // Keeps track of peers { peerID, peer }
+    const iceCandidateQueues = useRef({}); // Per-peer ICE candidate queues
     const [peers, setPeers] = useState([]); // Array of React components for remote videos
     const messagesEndRef = useRef(null);
 
@@ -75,9 +83,67 @@ const ActiveStudyRoom = () => {
             }
         };
         fetchHistoryAndDetails();
-        // Skip adding 'user' or 'navigate' to dependencies to prevent infinite loops or redundant fetches
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [roomId]);
+
+    // --- WebRTC Helper Functions ---
+
+    function flushIceCandidates(peerID) {
+        const queue = iceCandidateQueues.current[peerID];
+        if (queue && queue.length > 0) {
+            const peerObj = peersRef.current.find(p => p.peerID === peerID);
+            if (peerObj && !peerObj.peer.destroyed) {
+                console.log(`[WebRTC] Flushing ${queue.length} queued ICE candidates for ${peerID}`);
+                queue.forEach(candidate => {
+                    try {
+                        peerObj.peer.signal(candidate);
+                    } catch (e) {
+                        console.warn(`[WebRTC] Failed to signal queued ICE candidate:`, e.message);
+                    }
+                });
+            }
+            iceCandidateQueues.current[peerID] = [];
+        }
+    }
+
+    function removePeer(peerID) {
+        const peerObj = peersRef.current.find(p => p.peerID === peerID);
+        if (peerObj && !peerObj.peer.destroyed) peerObj.peer.destroy();
+        peersRef.current = peersRef.current.filter(p => p.peerID !== peerID);
+        delete iceCandidateQueues.current[peerID];
+        setPeers([...peersRef.current]);
+    }
+
+    function upsertPeer(peerID, peer) {
+        const existing = peersRef.current.find(p => p.peerID === peerID);
+        if (existing && existing.peer !== peer && !existing.peer.destroyed) {
+            existing.peer.destroy();
+        }
+        peersRef.current = peersRef.current.filter(p => p.peerID !== peerID);
+        peersRef.current.push({ peerID, peer });
+        setPeers([...peersRef.current]);
+    }
+
+    function hasActivePeer(peerID) {
+        const existing = peersRef.current.find(p => p.peerID === peerID);
+        return !!(existing && existing.peer && !existing.peer.destroyed);
+    }
+
+    function monitorIceState(peer, peerID) {
+        peer.on('iceStateChange', (iceState) => {
+            console.log(`[WebRTC] ICE state for ${peerID}: ${iceState}`);
+            if (iceState === 'connected' || iceState === 'completed') {
+                flushIceCandidates(peerID);
+            }
+            if (iceState === 'failed' || iceState === 'closed') {
+                console.warn(`[WebRTC] ICE ${iceState} for ${peerID}, removing peer`);
+                removePeer(peerID);
+            }
+            if (iceState === 'disconnected') {
+                console.warn(`[WebRTC] ICE disconnected for ${peerID}, keeping peer alive for recovery`);
+            }
+        });
+    }
 
     // Socket & WebRTC Initialization
     useEffect(() => {
@@ -85,10 +151,26 @@ const ActiveStudyRoom = () => {
 
         socketRef.current = io(SOCKET_SERVER_URL);
         const streamRef = { current: null };
-        // Queue signals that arrive before our stream is ready
+        const latestUsersRef = { current: [] };
         const pendingSignals = [];
 
-        // --- Persistent Listeners (Chat & Room) ---
+        function reconcilePeers(users, currentStream) {
+            if (!currentStream || !socketRef.current?.id || !Array.isArray(users)) return;
+
+            const mySocketId = socketRef.current.id;
+            users.forEach(otherUser => {
+                const otherSocketId = otherUser.socketId;
+                if (!otherSocketId || otherSocketId === mySocketId) return;
+
+                const alreadyConnected = hasActivePeer(otherSocketId);
+                if (!alreadyConnected && mySocketId < otherSocketId) {
+                    console.log(`[WebRTC] Reconcile: Initiating missing peer to ${otherSocketId}`);
+                    const peer = createPeer(otherSocketId, mySocketId, currentStream);
+                    upsertPeer(otherSocketId, peer);
+                }
+            });
+        }
+
         socketRef.current.on("receive-message", (message) => {
             const incomingClientId = message.clientSideId ? String(message.clientSideId) : null;
             const senderId = String(message.sender?._id || message.sender);
@@ -114,31 +196,22 @@ const ActiveStudyRoom = () => {
         });
 
         socketRef.current.on("room-users", (users) => {
+            latestUsersRef.current = users;
             setParticipants(users);
             const currentSocketIds = users.map(u => u.socketId);
             
-            // Remove stale peers
             const stalePeers = peersRef.current.filter(p => !currentSocketIds.includes(p.peerID));
             if (stalePeers.length > 0) {
-                stalePeers.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
+                stalePeers.forEach(p => {
+                    if (!p.peer.destroyed) p.peer.destroy();
+                    delete iceCandidateQueues.current[p.peerID];
+                });
                 peersRef.current = peersRef.current.filter(p => currentSocketIds.includes(p.peerID));
                 setPeers([...peersRef.current]);
             }
 
-            // BACKFILL: connect to missing participants (only if stream is ready)
             if (streamRef.current) {
-                users.forEach(otherUser => {
-                    const alreadyConnected = peersRef.current.some(p => p.peerID === otherUser.socketId);
-                    if (!alreadyConnected && otherUser.socketId !== socketRef.current.id) {
-                        // Only initiate if our socket ID is lexicographically smaller
-                        if (socketRef.current.id < otherUser.socketId) {
-                            console.log(`[WebRTC] Backfill: Initiating peer to ${otherUser.socketId}`);
-                            const peer = createPeer(otherUser.socketId, socketRef.current.id, streamRef.current);
-                            peersRef.current.push({ peerID: otherUser.socketId, peer });
-                            setPeers([...peersRef.current]);
-                        }
-                    }
-                });
+                reconcilePeers(users, streamRef.current);
             }
         });
 
@@ -148,18 +221,13 @@ const ActiveStudyRoom = () => {
         });
 
         socketRef.current.on("user-left", (socketId) => {
-            const peerObj = peersRef.current.find(p => p.peerID === socketId);
-            if (peerObj && !peerObj.peer.destroyed) peerObj.peer.destroy();
-            peersRef.current = peersRef.current.filter(p => p.peerID !== socketId);
-            setPeers([...peersRef.current]);
+            removePeer(socketId);
         });
 
-        // --- UNIFIED WebRTC Signaling Listener (FIX #1) ---
         socketRef.current.on("webrtc-signal", payload => {
             const { signal, from } = payload;
             console.log(`[WebRTC] Received signal from ${from}, type=${signal.type || 'ice-candidate'}`);
 
-            // If stream is not ready yet, queue the signal
             if (!streamRef.current) {
                 console.log(`[WebRTC] Stream not ready, queuing signal from ${from}`);
                 pendingSignals.push(payload);
@@ -173,22 +241,52 @@ const ActiveStudyRoom = () => {
             const existingPeer = peersRef.current.find(p => p.peerID === from);
 
             if (signal.type === 'offer') {
-                // New offer: destroy old peer if any, create a non-initiator peer
                 if (existingPeer && !existingPeer.peer.destroyed) {
-                    existingPeer.peer.destroy();
+                    try {
+                        existingPeer.peer.signal(signal);
+                        setTimeout(() => flushIceCandidates(from), 100);
+                        return;
+                    } catch (e) {
+                        console.warn(`[WebRTC] Failed to apply offer on existing peer ${from}, recreating peer:`, e.message);
+                        removePeer(from);
+                    }
                 }
+
                 peersRef.current = peersRef.current.filter(p => p.peerID !== from);
+                if (!iceCandidateQueues.current[from]) {
+                    iceCandidateQueues.current[from] = [];
+                }
 
                 console.log(`[WebRTC] Creating answer peer for offer from ${from}`);
                 const peer = addPeer(signal, from, currentStream);
-                peersRef.current.push({ peerID: from, peer });
-                setPeers([...peersRef.current]);
-            } else {
-                // answer or ICE candidate — forward to the existing peer
+                upsertPeer(from, peer);
+            } else if (signal.type === 'answer') {
                 if (existingPeer && !existingPeer.peer.destroyed) {
                     existingPeer.peer.signal(signal);
+                    setTimeout(() => flushIceCandidates(from), 100);
                 } else {
-                    console.warn(`[WebRTC] Received signal for unknown peer ${from}, ignoring`);
+                    console.warn(`[WebRTC] Received answer for unknown peer ${from}, ignoring`);
+                }
+            } else {
+                if (existingPeer && !existingPeer.peer.destroyed) {
+                    const pc = existingPeer.peer._pc;
+                    if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+                        try {
+                            existingPeer.peer.signal(signal);
+                        } catch (e) {
+                            console.warn(`[WebRTC] Error signaling ICE to ${from}, queuing:`, e.message);
+                            if (!iceCandidateQueues.current[from]) iceCandidateQueues.current[from] = [];
+                            iceCandidateQueues.current[from].push(signal);
+                        }
+                    } else {
+                        console.log(`[WebRTC] Remote description not set for ${from}, queuing ICE candidate`);
+                        if (!iceCandidateQueues.current[from]) iceCandidateQueues.current[from] = [];
+                        iceCandidateQueues.current[from].push(signal);
+                    }
+                } else {
+                    console.log(`[WebRTC] No peer for ${from} yet, queuing ICE candidate`);
+                    if (!iceCandidateQueues.current[from]) iceCandidateQueues.current[from] = [];
+                    iceCandidateQueues.current[from].push(signal);
                 }
             }
         }
@@ -197,18 +295,22 @@ const ActiveStudyRoom = () => {
             console.log(`[WebRTC] User joined notification: ${payload.socketId}`);
         });
 
-        // --- Media & Room Join (FIX #2: join-room AFTER stream ready) ---
         function joinRoomAndProcessQueue() {
             socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
             setIsLoading(false);
 
-            // Process any signals that arrived before our stream was ready
             if (pendingSignals.length > 0 && streamRef.current) {
                 console.log(`[WebRTC] Processing ${pendingSignals.length} queued signals`);
                 pendingSignals.forEach(p => handleIncomingSignal(p.from, p.signal, streamRef.current));
                 pendingSignals.length = 0;
             }
+
+            reconcilePeers(latestUsersRef.current, streamRef.current);
         }
+
+        const reconcileInterval = setInterval(() => {
+            reconcilePeers(latestUsersRef.current, streamRef.current);
+        }, 2500);
 
         if (!navigator.mediaDevices) {
             joinRoomAndProcessQueue();
@@ -227,14 +329,23 @@ const ActiveStudyRoom = () => {
         }
 
         return () => {
-            if (socketRef.current) socketRef.current.disconnect();
+            if (socketRef.current) {
+                socketRef.current.off("receive-message");
+                socketRef.current.off("room-users");
+                socketRef.current.off("room-ended");
+                socketRef.current.off("user-left");
+                socketRef.current.off("webrtc-signal");
+                socketRef.current.off("user-joined");
+                socketRef.current.disconnect();
+            }
             if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
             peersRef.current.forEach(p => { if (!p.peer.destroyed) p.peer.destroy(); });
             peersRef.current = [];
+            iceCandidateQueues.current = {};
+            clearInterval(reconcileInterval);
         };
     }, [roomId]);
 
-    // Auto-scroll chat
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     };
@@ -243,8 +354,6 @@ const ActiveStudyRoom = () => {
         scrollToBottom();
     }, [messages]);
 
-
-    // --- ICE Server Configuration (FIX #4) ---
     const iceServers = [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
@@ -274,8 +383,9 @@ const ActiveStudyRoom = () => {
         }
     ];
 
-    // --- WebRTC Helpers (FIX #1: Unified signaling) ---
     function createPeer(userToSignal, callerID, stream) {
+        iceCandidateQueues.current[userToSignal] = iceCandidateQueues.current[userToSignal] || [];
+
         const peer = new Peer({
             initiator: true,
             trickle: true,
@@ -283,7 +393,6 @@ const ActiveStudyRoom = () => {
             config: { iceServers }
         });
 
-        // Send ALL signals via unified event — no type filtering
         peer.on("signal", signal => {
             console.log(`[WebRTC] createPeer signal -> to=${userToSignal}, type=${signal.type || 'ice'}`);
             socketRef.current.emit("webrtc-signal", { signal, to: userToSignal });
@@ -291,16 +400,23 @@ const ActiveStudyRoom = () => {
 
         peer.on("error", err => {
             console.error(`[WebRTC] Peer error (initiator -> ${userToSignal}):`, err.message);
+            if (err.message?.includes('User-Initiated Abort') || err.message?.includes('Ice connection failed')) {
+                removePeer(userToSignal);
+            }
         });
 
         peer.on("connect", () => {
             console.log(`[WebRTC] ✅ Connected to ${userToSignal}`);
         });
 
+        monitorIceState(peer, userToSignal);
+
         return peer;
     }
 
     function addPeer(incomingSignal, callerID, stream) {
+        iceCandidateQueues.current[callerID] = iceCandidateQueues.current[callerID] || [];
+
         const peer = new Peer({
             initiator: false,
             trickle: true,
@@ -308,7 +424,6 @@ const ActiveStudyRoom = () => {
             config: { iceServers }
         });
 
-        // Send ALL signals via unified event — no type filtering
         peer.on("signal", signal => {
             console.log(`[WebRTC] addPeer signal -> to=${callerID}, type=${signal.type || 'ice'}`);
             socketRef.current.emit("webrtc-signal", { signal, to: callerID });
@@ -316,19 +431,41 @@ const ActiveStudyRoom = () => {
 
         peer.on("error", err => {
             console.error(`[WebRTC] Peer error (responder -> ${callerID}):`, err.message);
+            if (err.message?.includes('User-Initiated Abort') || err.message?.includes('Ice connection failed')) {
+                removePeer(callerID);
+            }
         });
 
         peer.on("connect", () => {
             console.log(`[WebRTC] ✅ Connected to ${callerID}`);
+            const queue = iceCandidateQueues.current[callerID];
+            if (queue && queue.length > 0) {
+                console.log(`[WebRTC] Flushing ${queue.length} ICE candidates on connect for ${callerID}`);
+                queue.forEach(candidate => {
+                    try { peer.signal(candidate); } catch (e) { /* ignore */ }
+                });
+                iceCandidateQueues.current[callerID] = [];
+            }
         });
 
-        // Signal the incoming offer to start the handshake
+        monitorIceState(peer, callerID);
+
         peer.signal(incomingSignal);
+
+        setTimeout(() => {
+            const queue = iceCandidateQueues.current[callerID];
+            if (queue && queue.length > 0) {
+                console.log(`[WebRTC] Post-offer flush: ${queue.length} ICE candidates for ${callerID}`);
+                queue.forEach(candidate => {
+                    try { peer.signal(candidate); } catch (e) { /* ignore */ }
+                });
+                iceCandidateQueues.current[callerID] = [];
+            }
+        }, 200);
 
         return peer;
     }
 
-    // --- Media Controls ---
     const toggleAudio = () => {
         if (stream) {
             const audioTrack = stream.getAudioTracks()[0];
@@ -370,7 +507,6 @@ const ActiveStudyRoom = () => {
         }
     };
 
-    // --- Chat Logic ---
     const sendMessage = (e) => {
         e.preventDefault();
         if (!newMessage.trim()) return;
@@ -378,7 +514,6 @@ const ActiveStudyRoom = () => {
         const clientSideId = `client-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         console.log(`[Chat] Sending message. ClientID: ${clientSideId}`);
         
-        // Optimistic Update: Add message immediately
         const optimisticMessage = {
             roomId,
             sender: {
@@ -394,11 +529,10 @@ const ActiveStudyRoom = () => {
         setMessages(prev => [...prev, optimisticMessage]);
         scrollToBottom();
 
-        // Send to server
         socketRef.current.emit("send-message", {
             roomId,
             sender: user.id,
-            name: user.name, // Added name for fallback
+            name: user.name, 
             text: newMessage,
             clientSideId
         });
@@ -408,24 +542,25 @@ const ActiveStudyRoom = () => {
 
     if (isLoading) {
         return (
-            <div className="flex h-screen items-center justify-center bg-gray-900 text-white">
-                <Loader2 className="w-10 h-10 animate-spin text-purple-500 mb-4" />
-                <h2 className="text-xl ml-4">Joining Room & Starting Camera...</h2>
+            <div className="flex h-screen items-center justify-center bg-background dark:bg-[#0a0a0f] text-slate-900 dark:text-white">
+                <Loader2 className="w-10 h-10 animate-spin text-purple-600 dark:text-[#8c30e8] mb-4" />
+                <h2 className="text-xl ml-4 font-bold tracking-wide">Joining Room & Starting Camera...</h2>
             </div>
         );
     }
 
     return (
-        <div className="flex flex-col h-screen bg-gray-900 text-white overflow-hidden font-sans">
+        <div className="flex flex-col h-screen bg-background dark:bg-[#0a0a0f] text-foreground dark:text-white overflow-hidden font-sans">
 
             {/* Top Bar Navigation */}
-            <div className="h-16 bg-black/50 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 z-20">
+            <div className="h-16 bg-white/60 dark:bg-black/40 backdrop-blur-md border-b border-slate-200 dark:border-white/[0.06] flex items-center justify-between px-6 z-20">
                 <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                    <h1 className="text-xl font-bold tracking-wide text-slate-900 dark:text-white flex items-center gap-2">
+                        <Sparkles size={18} className="text-purple-600 dark:text-[#8c30e8] hidden sm:block" />
                         Study Room
                     </h1>
-                    <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full text-xs text-gray-400 border border-white/5">
-                        <Users className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="hidden md:flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-white/5 rounded-full text-xs font-bold text-slate-600 dark:text-gray-400 border border-slate-200 dark:border-white/10">
+                        <Users className="w-3.5 h-3.5 text-purple-600 dark:text-[#8c30e8]" />
                         {participants.length} Participant{participants.length !== 1 && 's'}
                     </div>
                 </div>
@@ -433,7 +568,7 @@ const ActiveStudyRoom = () => {
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => setIsChatOpen(!isChatOpen)}
-                        className={`md:hidden p-2 rounded-full transition-colors ${isChatOpen ? 'bg-purple-500/20 text-purple-400' : 'bg-white/10 hover:bg-white/20'}`}
+                        className={`md:hidden p-2 rounded-full transition-colors ${isChatOpen ? 'bg-purple-50 dark:bg-[#8c30e8]/20 text-purple-600 dark:text-[#8c30e8]' : 'text-slate-500 hover:bg-slate-100 dark:text-gray-400 dark:hover:bg-white/10'}`}
                     >
                         <MessageSquare className="w-5 h-5" />
                     </button>
@@ -441,7 +576,7 @@ const ActiveStudyRoom = () => {
                     {roomDetails?.createdBy?._id === user.id && (
                         <button
                             onClick={handleEndRoom}
-                            className="hidden sm:flex items-center gap-2 bg-red-600/80 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition-colors border border-red-500/20 shadow-lg shadow-red-500/20"
+                            className="hidden sm:flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 px-4 py-2 rounded-lg font-bold transition-colors border border-red-200 dark:border-red-500/20"
                         >
                             <LogOut className="w-4 h-4" />
                             <span>End Room</span>
@@ -449,7 +584,7 @@ const ActiveStudyRoom = () => {
                     )}
                     <button
                         onClick={handleLeaveRoom}
-                        className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 px-4 py-2 rounded-lg font-medium transition-colors border border-red-500/20"
+                        className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-300 px-4 py-2 rounded-lg font-bold transition-colors border border-slate-200 dark:border-white/10"
                     >
                         <LogOut className="w-4 h-4" />
                         <span className="hidden sm:inline">Leave</span>
@@ -461,11 +596,11 @@ const ActiveStudyRoom = () => {
             <div className="flex-1 flex overflow-hidden relative">
 
                 {/* Video Grid Area */}
-                <div className={`flex-1 flex justify-center items-center p-4 lg:p-6 bg-black/20 ${isChatOpen ? 'hidden md:flex' : 'flex'}`}>
+                <div className={`flex-1 flex justify-center items-center p-4 lg:p-6 bg-slate-50 dark:bg-black/20 ${isChatOpen ? 'hidden md:flex' : 'flex'}`}>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full h-full max-w-7xl auto-rows-fr">
 
                         {/* Local User Video */}
-                        <div className="relative bg-gray-800 rounded-2xl overflow-hidden border border-white/10 shadow-lg group">
+                        <div className="relative bg-slate-100 dark:bg-[#191121] rounded-2xl overflow-hidden border border-slate-200 dark:border-[#8c30e8]/30 shadow-xl group">
                             <video
                                 muted
                                 ref={userVideoRef}
@@ -475,17 +610,17 @@ const ActiveStudyRoom = () => {
                             />
                             {/* Avatar Fallback if video muted */}
                             {isVideoMuted && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                                    <div className="w-24 h-24 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-4xl font-bold text-white shadow-inner">
+                                <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-[#191121]">
+                                    <div className="w-24 h-24 rounded-full bg-purple-50 border border-purple-100 text-purple-600 dark:bg-[#8c30e8]/20 dark:border-[#8c30e8]/30 dark:text-[#8c30e8] flex items-center justify-center text-4xl font-bold shadow-sm">
                                         {user?.name?.charAt(0).toUpperCase()}
                                     </div>
                                 </div>
                             )}
 
                             {/* Name Label */}
-                            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 text-sm font-medium rounded-lg flex items-center gap-2 border border-white/10">
+                            <div className="absolute bottom-4 left-4 bg-white/80 dark:bg-black/60 backdrop-blur-md px-3 py-1.5 text-sm font-bold rounded-lg flex items-center gap-2 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white">
                                 {user.name} (You)
-                                {isAudioMuted && <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                                {isAudioMuted && <MicOff className="w-3.5 h-3.5 text-red-500 dark:text-red-400" />}
                             </div>
                         </div>
 
@@ -500,10 +635,10 @@ const ActiveStudyRoom = () => {
                     </div>
 
                     {/* Floating Controls Bar */}
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-xl border border-white/10 rounded-full px-6 py-3 flex items-center gap-4 shadow-2xl z-30">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-[#191121]/90 backdrop-blur-xl border border-slate-200 dark:border-[#8c30e8]/30 rounded-full px-6 py-3 flex items-center gap-4 shadow-2xl z-30">
                         <button
                             onClick={toggleAudio}
-                            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md ${isAudioMuted ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-200'}`}
+                            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-sm ${isAudioMuted ? 'bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/20 dark:hover:bg-red-500/30 dark:text-red-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-300'}`}
                             title={isAudioMuted ? "Unmute" : "Mute"}
                         >
                             {isAudioMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
@@ -511,17 +646,17 @@ const ActiveStudyRoom = () => {
 
                         <button
                             onClick={toggleVideo}
-                            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-md ${isVideoMuted ? 'bg-red-500 hover:bg-red-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-200'}`}
+                            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all shadow-sm ${isVideoMuted ? 'bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/20 dark:hover:bg-red-500/30 dark:text-red-400' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-300'}`}
                             title={isVideoMuted ? "Turn on Camera" : "Turn off Camera"}
                         >
                             {isVideoMuted ? <VideoOff className="w-5 h-5" /> : <VideoIcon className="w-5 h-5" />}
                         </button>
 
-                        <div className="w-px h-8 bg-white/10 mx-2 hidden md:block"></div>
+                        <div className="w-px h-8 bg-slate-200 dark:bg-white/10 mx-2 hidden md:block"></div>
 
                         <button
                             onClick={() => setIsChatOpen(!isChatOpen)}
-                            className={`hidden md:flex w-12 h-12 rounded-full items-center justify-center transition-all shadow-md ${isChatOpen ? 'bg-purple-500 hover:bg-purple-600 text-white' : 'bg-white/10 hover:bg-white/20 text-gray-200'}`}
+                            className={`hidden md:flex w-12 h-12 rounded-full items-center justify-center transition-all shadow-sm ${isChatOpen ? 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8]/20 dark:text-[#8c30e8]' : 'bg-slate-100 hover:bg-slate-200 text-slate-600 dark:bg-white/5 dark:hover:bg-white/10 dark:text-gray-300'}`}
                             title="Toggle Chat"
                         >
                             <MessageSquare className="w-5 h-5" />
@@ -530,36 +665,35 @@ const ActiveStudyRoom = () => {
                 </div>
 
                 {/* Right Panel: Chat List */}
-                <div className={`${isChatOpen ? 'flex' : 'hidden'} w-full md:w-80 lg:w-96 flex-col bg-gray-900 border-l border-white/10 shadow-2xl z-10 md:relative absolute inset-0 md:inset-auto`}>
+                <div className={`${isChatOpen ? 'flex' : 'hidden'} w-full md:w-80 lg:w-96 flex-col bg-white dark:bg-[#191121] border-l border-slate-200 dark:border-[#8c30e8]/30 shadow-2xl z-10 md:relative absolute inset-0 md:inset-auto`}>
 
-                    <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
-                        <h2 className="font-semibold text-gray-200 flex items-center gap-2">
-                            <MessageSquare className="w-4 h-4 text-purple-400" /> Room Chat
+                    <div className="p-4 border-b border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 flex items-center justify-between">
+                        <h2 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 tracking-wide">
+                            <MessageSquare className="w-4 h-4 text-purple-600 dark:text-[#8c30e8]" /> Room Chat
                         </h2>
                         {/* Mobile close button */}
-                        <button onClick={() => setIsChatOpen(false)} className="md:hidden text-gray-400">
+                        <button onClick={() => setIsChatOpen(false)} className="md:hidden text-slate-400 hover:text-slate-900 dark:text-gray-400 dark:hover:text-white transition-colors">
                             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                         </button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10 bg-black/10">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin bg-slate-50 dark:bg-black/10">
                         {messages.length === 0 ? (
-                            <div className="text-gray-500 text-center text-sm py-10">
+                            <div className="text-slate-500 dark:text-gray-500 text-center text-sm font-medium py-10">
                                 Send a message to start the conversation!
                             </div>
                         ) : (
                             messages.map((msg, i) => {
-                                // Handle the populated sender object vs plain text from socket
                                 const senderId = msg.sender?._id || msg.sender;
                                 const senderName = msg.sender?.name || "Unknown";
                                 const isMe = senderId === user.id;
 
                                 return (
                                     <div key={msg._id || msg.clientSideId || `msg-${i}`} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} ${msg.isPending ? 'opacity-70' : 'opacity-100'}`}>
-                                        <span className="text-xs text-gray-500 mb-1 ml-1">
+                                        <span className="text-[11px] font-bold tracking-wider text-slate-400 dark:text-gray-500 mb-1 ml-1 uppercase">
                                             {senderName} {msg.isPending && '(sending...)'}
                                         </span>
-                                        <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-sm ${isMe ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-tr-sm' : 'bg-gray-800 text-gray-200 border border-white/5 rounded-tl-sm'}`}>
+                                        <div className={`px-4 py-2.5 rounded-2xl max-w-[85%] text-sm shadow-sm ${isMe ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-tr-sm shadow-purple-500/20' : 'bg-white text-slate-700 border border-slate-200 dark:bg-white/5 dark:text-gray-200 dark:border-white/10 rounded-tl-sm'}`}>
                                             {msg.text}
                                         </div>
                                     </div>
@@ -569,19 +703,19 @@ const ActiveStudyRoom = () => {
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="p-4 bg-gray-900 border-t border-white/10">
+                    <div className="p-4 bg-white dark:bg-[#191121] border-t border-slate-200 dark:border-[#8c30e8]/30">
                         <form onSubmit={sendMessage} className="relative flex items-center">
                             <input
                                 type="text"
                                 value={newMessage}
                                 onChange={(e) => setNewMessage(e.target.value)}
                                 placeholder="Type a message..."
-                                className="w-full bg-black/40 border border-white/10 rounded-full py-2.5 pl-4 pr-12 text-sm text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all placeholder-gray-500"
+                                className="w-full bg-slate-50 border border-slate-200 text-slate-900 placeholder-slate-400 dark:bg-white/5 dark:border-white/10 dark:text-white dark:placeholder-gray-500 rounded-xl py-3 pl-4 pr-12 text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]/20 transition-all"
                             />
                             <button
                                 type="submit"
                                 disabled={!newMessage.trim()}
-                                className="absolute right-1 w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white disabled:opacity-50 disabled:bg-gray-600 transition-colors"
+                                className="absolute right-1.5 w-9 h-9 rounded-lg bg-purple-600 dark:bg-[#8c30e8] flex items-center justify-center text-white disabled:opacity-50 disabled:bg-slate-300 dark:disabled:bg-white/10 disabled:text-slate-500 transition-colors shadow-sm"
                             >
                                 <Send className="w-4 h-4 -ml-0.5" />
                             </button>
@@ -594,59 +728,99 @@ const ActiveStudyRoom = () => {
     );
 };
 
-// Sub-component to render remote peer streams (FIX #3: Robust stream attachment)
+// Sub-component to render remote peer streams
 const VideoPeer = ({ peer, name }) => {
     const ref = useRef();
     const [hasStream, setHasStream] = useState(false);
+    const attachedStreamIdRef = useRef(null);
 
     useEffect(() => {
         if (!peer || peer.destroyed) return;
 
-        function attachStream(stream) {
-            if (ref.current && stream) {
-                console.log(`[VideoPeer] Attaching stream for ${name}, tracks: ${stream.getTracks().map(t => t.kind + ':' + t.readyState).join(', ')}`);
-                ref.current.srcObject = stream;
-                setHasStream(true);
-                // Force play in case autoplay is blocked
-                ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
+        let retryTimer = null;
+
+        function attachRemoteStream(stream) {
+            if (!ref.current || !stream) return;
+
+            const tracks = stream.getTracks();
+            const hasLiveTrack = tracks.some(t => t.readyState === 'live');
+            if (!hasLiveTrack) return;
+
+            if (attachedStreamIdRef.current === stream.id) return;
+
+            console.log(`[VideoPeer] Attaching REMOTE stream for ${name}, streamId=${stream.id}, tracks=${tracks.map(t => t.kind + ':' + t.readyState).join(', ')}`);
+            ref.current.srcObject = stream;
+            attachedStreamIdRef.current = stream.id;
+            setHasStream(true);
+            ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
+
+            if (retryTimer) {
+                clearInterval(retryTimer);
+                retryTimer = null;
             }
         }
 
-        // Check all possible places where the stream may already exist
-        const existingStream = peer.streams?.[0] 
-            || peer._remoteStreams?.[0]
-            || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
-        
-        if (existingStream) {
-            attachStream(existingStream);
+        function tryAttachExistingRemote() {
+            const existingRemote = peer._remoteStreams?.[0] || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
+            if (existingRemote) {
+                attachRemoteStream(existingRemote);
+                return true;
+            }
+            return false;
         }
 
-        // Listen for future stream arrivals
-        const onStream = (stream) => attachStream(stream);
-        const onTrack = (track, stream) => attachStream(stream);
+        const attached = tryAttachExistingRemote();
+        if (!attached) {
+            retryTimer = setInterval(() => {
+                if (peer.destroyed) {
+                    clearInterval(retryTimer);
+                    retryTimer = null;
+                    return;
+                }
+                tryAttachExistingRemote();
+            }, 700);
+        }
+
+        const onStream = (stream) => attachRemoteStream(stream);
+        const onTrack = (_track, stream) => {
+            if (stream) attachRemoteStream(stream);
+        };
 
         peer.on("stream", onStream);
         peer.on("track", onTrack);
 
-        // Cleanup listeners on unmount or peer change
+        const pcOnTrack = (event) => {
+            if (event.streams && event.streams[0]) {
+                attachRemoteStream(event.streams[0]);
+            }
+        };
+        if (peer._pc) {
+            peer._pc.addEventListener('track', pcOnTrack);
+        }
+
         return () => {
+            if (retryTimer) clearInterval(retryTimer);
             peer.removeListener("stream", onStream);
             peer.removeListener("track", onTrack);
+            if (peer._pc) {
+                peer._pc.removeEventListener('track', pcOnTrack);
+            }
+            attachedStreamIdRef.current = null;
         };
     }, [peer, name]);
 
     return (
-        <div className="relative bg-gray-800 rounded-2xl overflow-hidden border border-white/10 shadow-lg group">
+        <div className="relative bg-slate-100 dark:bg-[#191121] rounded-2xl overflow-hidden border border-slate-200 dark:border-[#8c30e8]/30 shadow-xl group">
             <video ref={ref} autoPlay playsInline className="w-full h-full object-cover" />
             {!hasStream && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-3xl font-bold text-white animate-pulse">
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-100 dark:bg-[#191121]">
+                    <div className="w-24 h-24 rounded-full bg-purple-50 border border-purple-100 text-purple-600 dark:bg-[#8c30e8]/20 dark:border-[#8c30e8]/30 dark:text-[#8c30e8] flex items-center justify-center text-4xl font-bold shadow-sm animate-pulse">
                         {name?.charAt(0)?.toUpperCase() || '?'}
                     </div>
-                    <p className="absolute bottom-16 text-xs text-gray-400">Connecting...</p>
+                    <p className="absolute bottom-16 text-xs font-bold tracking-widest text-slate-400 dark:text-gray-500 uppercase">Connecting...</p>
                 </div>
             )}
-            <div className="absolute bottom-4 left-4 bg-black/60 backdrop-blur-md px-3 py-1.5 text-sm font-medium rounded-lg text-white border border-white/10">
+            <div className="absolute bottom-4 left-4 bg-white/80 dark:bg-black/60 backdrop-blur-md px-3 py-1.5 text-sm font-bold rounded-lg text-slate-900 dark:text-white border border-slate-200 dark:border-white/10">
                 {name}
             </div>
         </div>
