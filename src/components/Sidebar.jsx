@@ -13,7 +13,11 @@ import {
     UserPlus,
     Headphones,
     ChevronLeft,
+<<<<<<< HEAD
     Sparkles // Added for the logo UI
+=======
+    ChevronRight
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -42,6 +46,7 @@ const Sidebar = () => {
         setIsExpanded(!isExpanded);
     };
 
+<<<<<<< HEAD
     // Styling logic ko match karne ke liye isExpanded ko isCollapsed mein map kiya hai
     const isCollapsed = !isExpanded;
 
@@ -86,17 +91,55 @@ const Sidebar = () => {
                         aria-hidden="true"
                     />
                 </button>
+=======
+    const isRouteActive = (route) => {
+        if (route === '/studyroom') {
+            return location.pathname === route || location.pathname.startsWith('/studyroom/');
+        }
+        return location.pathname === route;
+    };
+
+    return (
+        <aside
+            className={`${isExpanded ? 'w-64' : 'w-20'
+                } sidebar-shell sticky top-0 h-screen flex flex-col transition-all duration-300 ease-in-out relative`}
+        >
+            {/* Toggle Button */}
+            <button
+                onClick={toggleSidebar}
+                className="absolute -right-3 top-8 bg-[var(--accent-primary)] rounded-full p-1 text-white shadow-lg hover:brightness-95 transition-colors z-50 border border-white"
+            >
+                {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            </button>
+
+            {/* Logo */}
+            <div className={`p-6 border-b border-[var(--border)] flex items-center ${isExpanded ? 'justify-between' : 'justify-center'}`}>
+                {isExpanded ? (
+                    <h1 className="text-2xl font-heading font-bold bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] bg-clip-text text-transparent whitespace-nowrap overflow-hidden">
+                        StudyBuddy
+                    </h1>
+                ) : (
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-[var(--accent-primary)] to-[var(--accent-secondary)] flex items-center justify-center text-white font-bold">
+                        SB
+                    </div>
+                )}
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
             </div>
 
             {/* ── Navigation ── */}
             <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar" aria-label="Main Navigation">
                 {sidebarItems.map((item) => {
+<<<<<<< HEAD
                     const isActive = location.pathname === item.id;
 
+=======
+                    const isActive = isRouteActive(item.id);
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
                     return (
                         <button
                             key={item.id}
                             onClick={() => navigate(item.id)}
+<<<<<<< HEAD
                             aria-current={isActive ? 'page' : undefined}
                             className={`
                                 w-full group relative flex items-center gap-3 rounded-xl
@@ -113,6 +156,18 @@ const Sidebar = () => {
                             {isActive && (
                                 <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-purple-600 dark:bg-purple-400" aria-hidden="true" />
                             )}
+=======
+                            className={`nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm group relative ${isActive
+                                    ? 'active'
+                                    : ''
+                                } ${!isExpanded && 'justify-center'}`}
+                            title={!isExpanded ? item.label : ''}
+                        >
+                            <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive
+                                    ? 'text-[var(--accent-primary)]'
+                                    : 'text-[var(--text-muted)] group-hover:text-[var(--accent-primary)]'
+                                }`} />
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
 
                             <item.icon
                                 size={20}
@@ -131,6 +186,7 @@ const Sidebar = () => {
                                 </span>
                             )}
 
+<<<<<<< HEAD
                             {/* Tooltip (collapsed) */}
                             {isCollapsed && (
                                 <span
@@ -145,6 +201,11 @@ const Sidebar = () => {
                                         transition-all duration-200 z-50
                                     "
                                 >
+=======
+                            {/* Tooltip for collapsed state */}
+                            {!isExpanded && (
+                                <div className="absolute left-full ml-2 px-2 py-1 bg-white text-[var(--text-primary)] text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-[var(--border)] shadow-lg">
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
                                     {item.label}
                                 </span>
                             )}
@@ -153,6 +214,7 @@ const Sidebar = () => {
                 })}
             </nav>
 
+<<<<<<< HEAD
             {/* ── Bottom Actions (Logout) ── */}
             <div className="px-3 pb-4 border-t border-border dark:border-white/[0.06] pt-3 space-y-1">
                 <button
@@ -164,10 +226,19 @@ const Sidebar = () => {
                         transition-colors
                         ${isCollapsed ? "justify-center px-0 py-3" : "px-4 py-3"}
                     `}
+=======
+            {/* Logout */}
+            <div className="p-3 border-t border-[var(--border)]">
+                <button
+                    onClick={handleLogout}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-500 hover:bg-red-50 transition-all duration-200 text-sm group relative ${!isExpanded && 'justify-center'}`}
+                    title={!isExpanded ? 'Logout' : ''}
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
                 >
                     <LogOut size={18} className="shrink-0" aria-hidden="true" />
                     {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
 
+<<<<<<< HEAD
                     {isCollapsed && (
                         <span
                             role="tooltip"
@@ -181,6 +252,10 @@ const Sidebar = () => {
                                 transition-all duration-200 z-50
                             "
                         >
+=======
+                    {!isExpanded && (
+                        <div className="absolute left-full ml-2 px-2 py-1 bg-white text-[var(--text-primary)] text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-[var(--border)] shadow-lg">
+>>>>>>> 2847710994b1259fcef4f688b7892cf24fcdf658
                             Logout
                         </span>
                     )}

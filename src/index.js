@@ -5,14 +5,23 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import process from 'process';
 import { Buffer } from 'buffer';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 
 // Polyfills for simple-peer (Webpack 5 removes Node built-ins)
 window.process = process;
 window.Buffer = Buffer;
 
+const googleClientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
-  <App />
+  googleClientId ? (
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <App />
+    </GoogleOAuthProvider>
+  ) : (
+    <App />
+  )
 );
 
 // If you want to start measuring performance in your app, pass a function

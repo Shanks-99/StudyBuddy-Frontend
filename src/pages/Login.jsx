@@ -101,19 +101,40 @@ const Login = () => {
             }
 
             // Redirect based on user's registered role
-            if (response.role === 'teacher') {
-                navigate('/instructor-dashboard');
-            } else {
-                navigate('/student-dashboard');
-            }
+            navigateByRole(response.role);
         } catch (err) {
             setApiError(err.response?.data?.msg || 'Login failed. Please try again.');
             setIsLoading(false);
         }
     };
 
-    const toggleRole = () => {
-        setIsTeacher(!isTeacher);
+    const handleGoogleSuccess = async (credentialResponse) => {
+        setApiError('');
+
+        if (!credentialResponse?.credential) {
+            setApiError('Google login failed. No token received.');
+            return;
+        }
+
+        try {
+            setIsGoogleLoading(true);
+            const expectedRole = isTeacher ? 'teacher' : 'student';
+            const response = await loginWithGoogle({
+                idToken: credentialResponse.credential,
+                role: expectedRole,
+            });
+
+            if (response.role !== expectedRole) {
+                setApiError(getRoleMismatchMessage(response.role));
+                return;
+            }
+
+            navigateByRole(response.role);
+        } catch (err) {
+            setApiError(err.response?.data?.msg || 'Google login failed. Please try again.');
+        } finally {
+            setIsGoogleLoading(false);
+        }
     };
 
     return (
