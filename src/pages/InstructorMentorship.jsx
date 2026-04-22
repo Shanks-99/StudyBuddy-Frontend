@@ -39,6 +39,12 @@ const dayLabels = {
     sat: 'Saturday',
 };
 
+const toTitleCase = (value = '') => {
+    const normalized = String(value).trim();
+    if (!normalized) return '';
+    return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
+};
+
 const InstructorMentorship = () => {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
@@ -186,7 +192,7 @@ const InstructorMentorship = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 p-6">
                     <h1 className="text-3xl font-bold text-white">Instructor Mentorship</h1>
-                    <p className="text-gray-400 mt-1">This area is separate from student mentorship. You can use mentorship tools now.</p>
+                    <p className="text-gray-400 mt-1">Guide learners with focused 1:1 sessions, shape their momentum, and track every milestone.</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6">
@@ -247,7 +253,7 @@ const InstructorMentorship = () => {
                                                     )}
                                                     {!session.canJoinNow && (
                                                         <span className="px-3 py-1 rounded-lg text-xs bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
-                                                            {session.status}
+                                                            {toTitleCase(session.status)}
                                                         </span>
                                                     )}
                                                 </div>
@@ -262,7 +268,7 @@ const InstructorMentorship = () => {
                                 </div>
 
                                 <div className="rounded-2xl p-5 border border-white/15 bg-white/10">
-                                    <h3 className="text-white font-bold text-xl mb-4">Recent Sessions (Top 3)</h3>
+                                    <h3 className="text-white font-bold text-xl mb-4">Recent Sessions</h3>
                                     <div className="space-y-3">
                                         {recentSessions.map((session) => (
                                             <div key={`recent-${session.id}`} className="rounded-xl p-4 border border-white/10 bg-black/20">
