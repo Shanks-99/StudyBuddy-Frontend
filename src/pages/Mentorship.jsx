@@ -431,143 +431,159 @@ const Mentorship = () => {
     };
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 overflow-hidden">
+        <div className="flex h-screen bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans relative overflow-hidden transition-colors duration-300">
+            {/* Atmospheric background */}
+            <div className="pointer-events-none absolute inset-0 z-0 opacity-0 dark:opacity-100 transition-opacity">
+                <div className="absolute -top-40 left-1/4 w-[500px] h-[500px] rounded-full bg-purple-600/10 blur-[160px]" />
+                <div className="absolute top-1/2 right-0 w-[400px] h-[400px] rounded-full bg-purple-600/5 blur-[140px]" />
+                <div className="absolute bottom-0 left-0 w-[350px] h-[350px] rounded-full bg-purple-600/5 blur-[120px]" />
+            </div>
+
             <Sidebar />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 p-5">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/30">
-                                <Sparkles className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-white">Mentorship Hub</h1>
-                                <p className="text-sm text-gray-300">Find the right mentor, faster</p>
-                            </div>
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+                {/* ── Top Header ── */}
+                <header className="bg-white/80 dark:bg-[#0f0a16]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 p-4 md:px-8 flex items-center justify-between z-20">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-purple-600 dark:bg-[#8c30e8] flex items-center justify-center shadow-md">
+                            <Sparkles className="w-5 h-5 text-white" />
                         </div>
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-900 dark:text-white tracking-wide">Mentorship Hub</h1>
+                            <p className="text-xs text-slate-500 dark:text-white/50">Find the right mentor, faster</p>
+                        </div>
+                    </div>
 
-                        <div className="flex items-start">
-                            <button className="relative p-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 transition-colors">
-                                <Bell className="w-5 h-5 text-gray-200" />
-                            </button>
-                        </div>
+                    <div className="flex items-center gap-3">
+                        <button className="p-2.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-600 dark:text-gray-300 border border-slate-200 dark:border-white/5 transition-colors">
+                            <Bell className="w-5 h-5" />
+                        </button>
                     </div>
                 </header>
 
-                <main className="flex-1 overflow-y-auto p-6">
-                    <div className="max-w-7xl mx-auto space-y-6">
-                        <section className="rounded-3xl border border-white/15 bg-gradient-to-r from-white/10 via-white/5 to-transparent p-6 text-center">
-                            <h2 className="text-3xl md:text-5xl font-extrabold leading-tight bg-gradient-to-r from-white to-purple-300 bg-clip-text text-transparent">
+                <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8">
+                    <div className="max-w-7xl mx-auto space-y-8">
+                        
+                        {/* ── Hero Search Section ── */}
+                        <section className="text-center mb-8 relative">
+                            <div className="absolute top-0 left-1/4 w-64 h-64 bg-purple-200 dark:bg-purple-600/10 rounded-full mix-blend-multiply dark:mix-blend-normal filter blur-3xl opacity-30 pointer-events-none" />
+                            
+                            <h2 className="text-4xl md:text-5xl font-serif font-bold mb-4 tracking-tight text-slate-900 dark:text-white relative z-10">
                                 Find Your Mentor
                             </h2>
-                            <p className="text-gray-300 max-w-3xl mx-auto mt-3 text-base md:text-lg">
+                            <p className="text-slate-500 dark:text-slate-400 text-base md:text-lg mb-8 max-w-2xl mx-auto relative z-10">
                                 Connect with top scholars and industry experts to accelerate your learning journey.
                             </p>
 
-                            <div className="mt-6 max-w-5xl mx-auto">
-                                <div className="rounded-2xl bg-white/10 border border-white/15 shadow-xl shadow-purple-500/10 px-4 py-3 flex items-center gap-3">
-                                    <Search className="w-5 h-5 text-gray-300" />
+                            <div className="max-w-2xl mx-auto relative z-20">
+                                <div className="relative flex items-center bg-white/70 dark:bg-white/[0.06] backdrop-blur-xl rounded-2xl border border-slate-200 dark:border-white/10 p-2 shadow-sm">
+                                    <Search className="w-5 h-5 text-slate-400 ml-3 shrink-0" />
                                     <input
                                         type="text"
                                         value={query}
                                         onChange={(e) => setQuery(e.target.value)}
                                         placeholder="Search by subject, name, or expertise..."
-                                        className="flex-1 bg-transparent text-white placeholder-gray-400 focus:outline-none"
+                                        className="w-full bg-transparent border-none focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 py-3 px-4 outline-none text-sm md:text-base"
                                     />
-                                    <button className="w-11 h-11 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 grid place-items-center transition-colors">
-                                        <SlidersHorizontal className="w-5 h-5 text-gray-200" />
+                                    <button className="bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-600 dark:text-slate-300 rounded-xl p-3 transition-colors shrink-0">
+                                        <SlidersHorizontal className="w-5 h-5" />
                                     </button>
                                 </div>
                             </div>
                         </section>
 
-                        <section className="rounded-2xl border border-white/10 bg-black/10 p-3 overflow-x-auto">
-                            <div className="flex items-center gap-3 min-w-max">
-                                {categories.map((category) => {
-                                    const active = activeCategory === category;
-                                    return (
-                                        <button
-                                            key={category}
-                                            onClick={() => setActiveCategory(category)}
-                                            className={`px-6 py-3 rounded-full font-semibold text-sm border transition-all ${
-                                                active
-                                                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 border-transparent text-white shadow-lg shadow-purple-500/30'
-                                                    : 'bg-white/5 border-white/10 text-gray-300 hover:bg-white/10'
-                                            }`}
-                                        >
-                                            {category}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </section>
+                        {/* ── Category Pills ── */}
+                        <div className="flex overflow-x-auto scrollbar-none space-x-3 mb-8 pb-2 px-1 items-center justify-start md:justify-center">
+                            {categories.map((category) => {
+                                const active = activeCategory === category;
+                                return (
+                                    <button
+                                        key={category}
+                                        onClick={() => setActiveCategory(category)}
+                                        className={`whitespace-nowrap px-6 py-2.5 rounded-full font-medium text-sm transition-all ${
+                                            active
+                                                ? 'bg-purple-600 dark:bg-[#8c30e8] text-white shadow-md border border-purple-500/20'
+                                                : 'bg-white/60 dark:bg-white/[0.06] hover:bg-white dark:hover:bg-white/10 text-slate-600 dark:text-slate-400 hover:text-purple-600 dark:hover:text-purple-300 border border-slate-200 dark:border-white/10 backdrop-blur-sm'
+                                        }`}
+                                    >
+                                        {category}
+                                    </button>
+                                );
+                            })}
+                        </div>
 
-                        <section className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-                            <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-5">
+                        {/* ── Main Layout: Mentors List & Sidebars ── */}
+                        <section className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                            
+                            {/* Mentors Grid (Left/Main) */}
+                            <div className="xl:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 {filteredMentors.map((mentor) => (
                                     <article
                                         key={mentor.id}
-                                        className="rounded-2xl bg-white/10 border border-white/15 p-5 backdrop-blur-lg shadow-xl flex flex-col"
+                                        className="rounded-2xl bg-white/75 dark:bg-white/[0.05] border border-slate-200/80 dark:border-white/10 p-6 backdrop-blur-lg shadow-sm flex flex-col hover:-translate-y-1 hover:shadow-md transition-all group"
                                     >
-                                        <div className="flex items-start justify-between mb-3">
+                                        <div className="flex items-start justify-between mb-4">
                                             <div className="relative">
-                                                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-white text-3xl font-extrabold grid place-items-center border border-white/20">
+                                                <div className="w-16 h-16 rounded-full bg-purple-600 dark:bg-[#8c30e8] text-white flex items-center justify-center text-xl font-bold shadow-sm">
                                                     {mentor.initials}
                                                 </div>
                                                 <span
-                                                    className={`absolute bottom-1 right-0 w-5 h-5 rounded-full border-2 border-gray-900 ${
-                                                        mentor.active ? 'bg-emerald-400' : 'bg-gray-400'
+                                                    className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white dark:border-[#0f0a16] ${
+                                                        mentor.active ? 'bg-green-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'
                                                     }`}
                                                 />
                                             </div>
 
                                             {mentor.rating !== null ? (
-                                                <div className="px-3 py-1.5 rounded-xl bg-yellow-500/20 border border-yellow-400/30 text-yellow-200 font-semibold flex items-center gap-1 text-sm">
-                                                    <Star className="w-4 h-4 fill-current" /> {mentor.rating}
+                                                <div className="px-2 py-1 rounded-lg bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-400/20 text-yellow-600 dark:text-yellow-400 font-bold flex items-center gap-1 text-xs">
+                                                    <Star className="w-3.5 h-3.5 fill-current" /> {mentor.rating}
                                                 </div>
                                             ) : (
-                                                <div className="px-3 py-1.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-blue-200 font-semibold text-sm capitalize">
+                                                <div className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-400/20 text-blue-600 dark:text-blue-400 font-bold text-xs capitalize">
                                                     {mentor.status}
                                                 </div>
                                             )}
                                         </div>
 
-                                        <h3 className="text-2xl font-bold text-white leading-tight">{mentor.name}</h3>
-                                        <p className="text-purple-300 font-semibold mt-1 text-lg">{mentor.title}</p>
-                                        <p className="text-gray-300 mt-3 leading-relaxed min-h-[64px] text-sm md:text-base">{mentor.bio}</p>
+                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                                            {mentor.name}
+                                        </h3>
+                                        <p className="text-purple-600 dark:text-purple-400 font-medium mt-1 text-sm">{mentor.title}</p>
+                                        <p className="text-slate-500 dark:text-slate-400 mt-3 leading-relaxed min-h-[60px] text-sm line-clamp-3">
+                                            {mentor.bio}
+                                        </p>
 
-                                        <div className="flex flex-wrap gap-2 mt-4">
+                                        <div className="flex flex-wrap gap-2 mt-4 mb-6">
                                             {mentor.tags.map((tag) => (
                                                 <span
                                                     key={tag}
-                                                    className="px-3 py-1 rounded-full text-xs bg-white/10 border border-white/10 text-gray-200"
+                                                    className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-100 dark:bg-white/[0.08] text-slate-600 dark:text-slate-300"
                                                 >
                                                     {tag}
                                                 </span>
                                             ))}
                                         </div>
 
-                                        <div className="mt-4 pt-4 border-t border-white/10 flex items-end justify-between gap-3">
+                                        <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/10 flex items-end justify-between gap-3">
                                             <div>
-                                                <div className="text-gray-400 text-xs">Rate</div>
+                                                <div className="text-slate-400 dark:text-slate-500 text-[10px] uppercase font-bold tracking-wider mb-0.5">Rate</div>
                                                 {mentor.rate !== null ? (
-                                                    <div className="text-2xl font-bold text-white">
+                                                    <div className="text-lg font-extrabold text-slate-900 dark:text-white">
                                                         ${mentor.rate}
-                                                        <span className="text-base text-gray-400 font-medium">/hr</span>
+                                                        <span className="text-sm text-slate-400 dark:text-slate-500 font-medium">/hr</span>
                                                     </div>
                                                 ) : (
-                                                    <div className="text-sm font-semibold text-gray-300">Not specified</div>
+                                                    <div className="text-xs font-semibold text-slate-500">Not specified</div>
                                                 )}
                                             </div>
 
                                             <div className="flex items-center gap-2">
-                                                <button className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white transition-colors">
+                                                <button className="p-2.5 rounded-xl bg-slate-50 dark:bg-white/5 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-500 dark:text-slate-300 transition-colors">
                                                     <MessageSquare className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => openBookingModal(mentor)}
-                                                    className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-semibold shadow-lg shadow-purple-500/30 transition-all"
+                                                    className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-sm font-bold shadow-md shadow-purple-500/20 transition-all"
                                                 >
                                                     Book Session
                                                 </button>
@@ -577,33 +593,40 @@ const Mentorship = () => {
                                 ))}
 
                                 {filteredMentors.length === 0 && (
-                                    <div className="md:col-span-2 rounded-2xl p-8 text-center border border-white/10 bg-white/5 text-gray-300">
-                                        No mentors found for this filter. Try another category or search keyword.
+                                    <div className="sm:col-span-2 rounded-2xl p-10 text-center border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm">
+                                        <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center mx-auto mb-4 text-slate-400">
+                                            <Search size={24} />
+                                        </div>
+                                        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-1">No mentors found</h3>
+                                        <p className="text-sm text-slate-500 dark:text-slate-400">Try adjusting your category or search term.</p>
                                     </div>
                                 )}
                             </div>
 
+                            {/* Sidebars (Right) */}
                             <aside className="space-y-6">
-                                <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-lg p-6">
-                                    <h3 className="text-xl font-bold text-white mb-4">Your Upcoming Sessions</h3>
+                                
+                                {/* Upcoming Sessions */}
+                                <div className="rounded-2xl bg-white/75 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 backdrop-blur-lg p-6 shadow-sm">
+                                    <h3 className="text-sm font-bold text-slate-500 dark:text-white/60 uppercase tracking-wider mb-4">Your Upcoming Sessions</h3>
                                     <div className="space-y-3">
                                         {featuredSessionCards.map((item) => (
                                             <div
                                                 key={`${item.mentor}-${item.time}`}
-                                                className="rounded-xl border border-white/10 bg-white/5 p-4"
+                                                className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-black/20 p-4"
                                             >
-                                                <div className="text-white font-semibold">{item.mentor}</div>
-                                                <div className="text-sm text-purple-300 mt-1">{item.topic}</div>
-                                                <div className="mt-3 flex items-center justify-between text-xs text-gray-300">
-                                                    <span className="flex items-center gap-1">
+                                                <div className="text-slate-900 dark:text-white font-bold text-sm">{item.mentor}</div>
+                                                <div className="text-xs font-medium text-purple-600 dark:text-purple-400 mt-1">{item.topic}</div>
+                                                <div className="mt-3 flex items-center justify-between text-xs text-slate-500 dark:text-gray-400 font-medium">
+                                                    <span className="flex items-center gap-1.5">
                                                         <CalendarDays className="w-3.5 h-3.5" /> {item.time}
                                                     </span>
                                                     {item.canJoinNow ? (
-                                                        <span className="px-2 py-1 rounded-lg bg-blue-500/20 border border-blue-400/30 text-blue-300">
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-600 border border-purple-200 dark:bg-purple-500/20 dark:border-purple-500/30 dark:text-purple-300">
                                                             Live Now
                                                         </span>
                                                     ) : (
-                                                        <span className="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-200 text-slate-600 border border-slate-300 dark:bg-white/10 dark:border-white/10 dark:text-white/70">
                                                             Scheduled
                                                         </span>
                                                     )}
@@ -611,7 +634,7 @@ const Mentorship = () => {
                                                 {item.canJoinNow && (
                                                     <button
                                                         onClick={() => handleJoinSession(item)}
-                                                        className="mt-3 w-full rounded-lg bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-semibold py-2 hover:from-emerald-600 hover:to-teal-600 transition-colors"
+                                                        className="mt-3 w-full rounded-lg bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-xs font-bold py-2.5 transition-colors shadow-sm"
                                                     >
                                                         Join Session
                                                     </button>
@@ -619,85 +642,92 @@ const Mentorship = () => {
                                             </div>
                                         ))}
                                         {featuredSessionCards.length === 0 && (
-                                            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
-                                                No upcoming sessions yet. Book a session and wait for mentor acceptance.
+                                            <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-black/20 p-4 text-xs text-slate-500 dark:text-gray-400 text-center">
+                                                No upcoming sessions yet. Book a session to get started.
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-lg p-6">
-                                    <h3 className="text-xl font-bold text-white mb-4">Recent Sessions (Top 3)</h3>
+                                {/* Recent Sessions */}
+                                <div className="rounded-2xl bg-white/75 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 backdrop-blur-lg p-6 shadow-sm">
+                                    <h3 className="text-sm font-bold text-slate-500 dark:text-white/60 uppercase tracking-wider mb-4">Recent Sessions</h3>
                                     <div className="space-y-3">
                                         {recentSessionCards.map((session) => (
                                             <div
                                                 key={`recent-${session._id || session.id || session.time}`}
-                                                className="rounded-xl border border-white/10 bg-white/5 p-4"
+                                                className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-black/20 p-4"
                                             >
-                                                <div className="text-white font-semibold">{session.mentor}</div>
-                                                <div className="text-sm text-purple-300 mt-1">{session.topic}</div>
-                                                <div className="mt-2 text-xs text-gray-300">{session.time}</div>
+                                                <div className="text-slate-900 dark:text-white font-bold text-sm">{session.mentor}</div>
+                                                <div className="text-xs font-medium text-purple-600 dark:text-purple-400 mt-1">{session.topic}</div>
+                                                <div className="mt-2 text-[10px] text-slate-500 dark:text-gray-500 uppercase font-bold tracking-wider">{session.time}</div>
                                             </div>
                                         ))}
                                         {recentSessionCards.length === 0 && (
-                                            <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-gray-300">
-                                                No recent sessions yet.
+                                            <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-black/20 p-4 text-xs text-slate-500 dark:text-gray-400 text-center">
+                                                No recent sessions found.
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="rounded-3xl bg-white/10 border border-white/15 backdrop-blur-lg p-6">
-                                    <h3 className="text-xl font-bold text-white mb-4">Quick Actions</h3>
-                                    <div className="space-y-3">
-                                        <button
-                                            onClick={handleOpenInstantModal}
-                                            className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 flex items-center justify-center gap-2 hover:from-blue-600 hover:to-purple-700 transition-all"
-                                        >
-                                            <Video className="w-4 h-4" /> Start Instant Session
-                                        </button>
-                                    </div>
+                                {/* Quick Actions */}
+                                <div className="rounded-2xl bg-white/75 dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 backdrop-blur-lg p-6 shadow-sm">
+                                    <h3 className="text-sm font-bold text-slate-500 dark:text-white/60 uppercase tracking-wider mb-4">Quick Actions</h3>
+                                    <button
+                                        onClick={handleOpenInstantModal}
+                                        className="w-full rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-sm font-bold py-3 flex items-center justify-center gap-2 shadow-md transition-all"
+                                    >
+                                        <Video className="w-4 h-4" /> Start Instant Session
+                                    </button>
                                 </div>
+
                             </aside>
                         </section>
                     </div>
                 </main>
             </div>
 
+            {/* ── Booking Modal ── */}
             {bookingMentor && (
-                <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm p-3 md:p-6">
-                    <div className="h-full w-full max-w-6xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col">
-                        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-                                <CalendarDays className="w-6 h-6 text-purple-600" /> Schedule a Session
+                <div className="fixed inset-0 z-50 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm p-4 md:p-8 flex items-center justify-center">
+                    <div className="h-full max-h-[700px] w-full max-w-5xl bg-white dark:bg-[#191121] rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50 dark:bg-black/20">
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                                <CalendarDays className="w-5 h-5 text-purple-600 dark:text-[#8c30e8]" /> Schedule a Session
                             </h3>
                             <button
                                 onClick={closeBookingModal}
-                                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+                                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors"
                             >
-                                <X className="w-7 h-7" />
+                                <X size={20} />
                             </button>
                         </div>
 
                         <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 overflow-hidden">
-                            <div className="p-6 border-r border-gray-200 overflow-y-auto">
+                            {/* Modal Left: Mentor Info */}
+                            <div className="p-6 border-r border-slate-200 dark:border-white/5 overflow-y-auto custom-scrollbar bg-white dark:bg-transparent">
                                 <div className="flex flex-col items-center text-center">
-                                    <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-blue-500 to-purple-600 text-white text-4xl font-bold grid place-items-center shadow-lg">
+                                    <div className="w-24 h-24 rounded-full bg-purple-600 dark:bg-[#8c30e8] text-white text-3xl font-extrabold grid place-items-center shadow-md border-4 border-white dark:border-[#191121]">
                                         {bookingMentor.initials}
                                     </div>
-                                    <h4 className="mt-4 text-4xl font-extrabold text-gray-800">{bookingMentor.name}</h4>
-                                    <p className="text-gray-600 text-xl mt-1">{bookingMentor.title}</p>
-                                    <p className="mt-2 px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-600 text-lg font-semibold inline-flex items-center gap-2">
-                                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                                    <h4 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">{bookingMentor.name}</h4>
+                                    <p className="text-purple-600 dark:text-purple-400 font-medium text-sm mt-1">{bookingMentor.title}</p>
+                                    
+                                    <div className="mt-3 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 border border-slate-200 dark:border-white/10">
+                                        <span className={`w-2 h-2 rounded-full ${selectedMentorWeeklySlotsCount > 0 ? 'bg-green-500' : 'bg-gray-400'}`} />
                                         {selectedMentorWeeklySlotsCount > 0 ? 'Availability Set' : 'Availability Not Set'}
-                                    </p>
-                                    <p className="mt-5 text-gray-600 max-w-lg text-[22px] leading-relaxed">{bookingMentor.bio}</p>
+                                    </div>
+                                    
+                                    <p className="mt-6 text-slate-600 dark:text-slate-400 max-w-sm text-sm leading-relaxed">{bookingMentor.bio}</p>
 
-                                    <div className="flex flex-wrap justify-center gap-2 mt-5">
+                                    <div className="flex flex-wrap justify-center gap-2 mt-6">
                                         {bookingMentor.tags.map((tag) => (
                                             <span
                                                 key={tag}
-                                                className="px-4 py-1.5 rounded-full bg-purple-100 text-purple-600 text-lg font-semibold"
+                                                className="px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider"
                                             >
                                                 {tag}
                                             </span>
@@ -705,43 +735,42 @@ const Mentorship = () => {
                                     </div>
                                 </div>
 
-                                <div className="mt-6 grid grid-cols-2 gap-3">
-                                    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                        <div className="text-gray-500 text-base">Profile Status</div>
-                                        <div className="text-2xl font-bold text-gray-800 mt-1 capitalize">{bookingMentor.status}</div>
+                                <div className="mt-8 grid grid-cols-2 gap-3">
+                                    <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-black/20 text-center">
+                                        <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Status</div>
+                                        <div className="text-lg font-bold text-slate-900 dark:text-white mt-1 capitalize">{bookingMentor.status}</div>
                                     </div>
-                                    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                        <div className="text-gray-500 text-base">Weekly Slots</div>
-                                        <div className="text-2xl font-bold text-gray-800 mt-1">{selectedMentorWeeklySlotsCount}</div>
-                                    </div>
-                                    <div className="rounded-2xl border border-gray-200 p-4 bg-gray-50">
-                                        <div className="text-gray-500 text-base">Rate</div>
-                                        <div className="text-2xl font-bold text-gray-800 mt-1">
+                                    <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-black/20 text-center">
+                                        <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Rate</div>
+                                        <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">
                                             {bookingMentor.rate !== null ? `$${bookingMentor.rate}/hr` : 'Not specified'}
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="p-6 overflow-y-auto">
-                                <div className="rounded-2xl border border-gray-200 p-5 bg-white">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <button onClick={goToPrevMonth} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100">
+                            {/* Modal Right: Calendar & Time */}
+                            <div className="p-6 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-black/10">
+                                <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-5 bg-white dark:bg-[#191121] shadow-sm mb-6">
+                                    <div className="flex items-center justify-between mb-6">
+                                        <button onClick={goToPrevMonth} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
                                             <ChevronLeft className="w-5 h-5" />
                                         </button>
-                                        <div className="text-3xl font-bold text-gray-800">{monthNames[viewMonthIndex]} {viewYear}</div>
-                                        <button onClick={goToNextMonth} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100">
+                                        <div className="text-lg font-bold text-slate-900 dark:text-white tracking-wide">
+                                            {monthNames[viewMonthIndex]} {viewYear}
+                                        </div>
+                                        <button onClick={goToNextMonth} className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors">
                                             <ChevronRight className="w-5 h-5" />
                                         </button>
                                     </div>
 
-                                    <div className="grid grid-cols-7 gap-2 text-center text-gray-500 font-semibold text-sm mb-2">
-                                        <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+                                    <div className="grid grid-cols-7 gap-2 text-center text-slate-400 dark:text-gray-500 font-bold text-[10px] uppercase tracking-wider mb-3">
+                                        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
                                     </div>
 
                                     <div className="grid grid-cols-7 gap-2">
                                         {calendarCells.map((day, idx) => {
-                                            if (!day) return <div key={`empty-${idx}`} className="h-12" />;
+                                            if (!day) return <div key={`empty-${idx}`} className="h-10" />;
 
                                             const dayDate = new Date(viewYear, viewMonthIndex, day);
                                             const now = new Date();
@@ -760,12 +789,12 @@ const Mentorship = () => {
                                                         setSelectedTime('');
                                                     }}
                                                     disabled={!isAvailableDay}
-                                                    className={`h-12 rounded-xl font-semibold transition-all ${
+                                                    className={`h-10 rounded-xl text-sm font-bold transition-all ${
                                                         activeDay
-                                                            ? 'bg-purple-600 text-white shadow-md'
+                                                            ? 'bg-purple-600 dark:bg-[#8c30e8] text-white shadow-md border-transparent'
                                                             : isAvailableDay
-                                                                ? 'text-gray-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
-                                                                : 'text-gray-300 cursor-not-allowed'
+                                                                ? 'text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10 dark:hover:bg-white/10'
+                                                                : 'text-slate-300 dark:text-white/10 cursor-not-allowed border border-transparent'
                                                     }`}
                                                 >
                                                     {day}
@@ -775,19 +804,19 @@ const Mentorship = () => {
                                     </div>
                                 </div>
 
-                                <div className="mt-6">
-                                    <div className="text-center text-gray-500 font-bold tracking-wide mb-3">AVAILABLE TIME SLOTS (1 HOUR)</div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div>
+                                    <div className="text-[10px] text-slate-500 dark:text-gray-400 font-bold tracking-wider uppercase mb-3 px-1">Available Time Slots (1 Hour)</div>
+                                    <div className="grid grid-cols-3 gap-2.5">
                                         {availableHourlySlots.map((slot) => {
                                             const activeSlot = selectedTime === slot;
                                             return (
                                                 <button
                                                     key={slot}
                                                     onClick={() => setSelectedTime(slot)}
-                                                    className={`py-3 rounded-2xl border text-base font-semibold transition-colors ${
+                                                    className={`py-2.5 rounded-xl border text-sm font-bold transition-colors ${
                                                         activeSlot
-                                                            ? 'border-purple-500 bg-purple-600 text-white'
-                                                            : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                                                            ? 'border-purple-600 bg-purple-600 text-white dark:border-[#8c30e8] dark:bg-[#8c30e8]'
+                                                            : 'border-slate-200 text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:text-gray-300 dark:hover:bg-white/5'
                                                     }`}
                                                 >
                                                     {slot}
@@ -795,40 +824,41 @@ const Mentorship = () => {
                                             );
                                         })}
                                         {availableHourlySlots.length === 0 && (
-                                            <div className="col-span-full text-sm text-gray-500 text-center py-2">
+                                            <div className="col-span-full text-xs font-medium text-slate-500 dark:text-gray-500 text-center py-4 bg-white dark:bg-[#191121] rounded-xl border border-slate-200 dark:border-white/5">
                                                 No slots available on this day.
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                {availableSlots.length === 0 && (
-                                    <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3">
+                                {availableSlots.length === 0 && selectedDate && (
+                                    <div className="mt-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-medium px-4 py-3">
                                         Mentor is unavailable on {selectedDayKey ? dayLabelMap[selectedDayKey] : 'this day'}.
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between gap-4 bg-white">
-                            <p className="text-gray-500 text-lg">
+                        {/* Modal Footer */}
+                        <div className="px-6 py-4 border-t border-slate-200 dark:border-white/10 flex items-center justify-between gap-4 bg-slate-50 dark:bg-black/20 shrink-0">
+                            <p className="text-xs font-medium text-slate-500 dark:text-gray-400 hidden sm:block">
                                 {selectedDate && selectedTime
                                     ? `Selected: ${monthNames[viewMonthIndex]} ${selectedDate}, ${viewYear} at ${selectedTime}`
                                     : 'Select a date and time to continue'}
                             </p>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-3 w-full sm:w-auto">
                                 <button
                                     onClick={closeBookingModal}
-                                    className="px-8 py-3 rounded-2xl border border-gray-300 text-gray-700 text-xl font-semibold hover:bg-gray-100 transition-colors"
+                                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 text-sm font-bold hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleConfirmBooking}
                                     disabled={!selectedDate || !selectedTime}
-                                    className="px-8 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-purple-600 text-white text-xl font-semibold disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed shadow-md inline-flex items-center gap-2"
+                                    className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all inline-flex items-center justify-center gap-2"
                                 >
-                                    <CheckCircle2 className="w-5 h-5" /> Confirm Booking
+                                    <CheckCircle2 size={16} /> Confirm
                                 </button>
                             </div>
                         </div>
@@ -836,40 +866,47 @@ const Mentorship = () => {
                 </div>
             )}
 
+            {/* ── Instant Session Modal ── */}
             {showInstantModal && (
-                <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm p-4 md:p-6">
-                    <div className="h-full w-full max-w-3xl mx-auto bg-white rounded-2xl border border-gray-200 shadow-2xl overflow-hidden flex flex-col">
-                        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                            <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
-                                <Video className="w-6 h-6 text-purple-600" /> Instant Session
+                <div className="fixed inset-0 z-50 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center">
+                    <div className="h-full max-h-[600px] w-full max-w-2xl bg-white dark:bg-[#191121] rounded-3xl border border-slate-200 dark:border-white/10 shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        
+                        <div className="px-6 py-4 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50 dark:bg-black/20">
+                            <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
+                                <Video className="w-5 h-5 text-purple-600 dark:text-[#8c30e8]" /> Instant Session
                             </h3>
                             <button
                                 onClick={handleCloseInstantModal}
-                                className="p-2 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+                                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors"
                             >
-                                <X className="w-7 h-7" />
+                                <X size={20} />
                             </button>
                         </div>
 
-                        <div className="p-6 overflow-y-auto">
-                            <p className="text-gray-600 mb-4">
-                                Showing mentors available at <span className="font-semibold">{nowContext.currentSlot}</span> on{' '}
-                                <span className="font-semibold">{nowContext.dateLabel}</span>.
+                        <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-white dark:bg-transparent">
+                            <p className="text-sm text-slate-600 dark:text-gray-400 mb-6 bg-slate-50 dark:bg-white/5 p-4 rounded-xl border border-slate-100 dark:border-white/5">
+                                Showing mentors available at <span className="font-bold text-slate-900 dark:text-white">{nowContext.currentSlot}</span> on{' '}
+                                <span className="font-bold text-slate-900 dark:text-white">{nowContext.dateLabel}</span>.
                             </p>
 
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {instantAvailableMentors.map((mentor) => (
                                     <div
                                         key={`instant-${mentor.id}`}
-                                        className="rounded-xl border border-gray-200 bg-gray-50 p-4 flex items-center justify-between gap-4"
+                                        className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.02] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm"
                                     >
-                                        <div>
-                                            <p className="text-gray-800 font-semibold">{mentor.name}</p>
-                                            <p className="text-sm text-gray-600">{mentor.category} • {mentor.title}</p>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-purple-600 dark:bg-[#8c30e8] text-white flex items-center justify-center text-lg font-bold shrink-0">
+                                                {mentor.initials}
+                                            </div>
+                                            <div>
+                                                <p className="text-base font-bold text-slate-900 dark:text-white">{mentor.name}</p>
+                                                <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mt-0.5">{mentor.category} &middot; {mentor.title}</p>
+                                            </div>
                                         </div>
                                         <button
                                             onClick={() => handleRequestInstantSession(mentor)}
-                                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700"
+                                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-sm font-bold shadow-md transition-colors whitespace-nowrap"
                                         >
                                             Request Now
                                         </button>
@@ -877,17 +914,17 @@ const Mentorship = () => {
                                 ))}
 
                                 {instantAvailableMentors.length === 0 && (
-                                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+                                    <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 p-8 text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
                                         No mentors are free right now for this exact time slot.
                                     </div>
                                 )}
                             </div>
                         </div>
 
-                        <div className="px-6 py-4 border-t border-gray-200 bg-white flex justify-end">
+                        <div className="px-6 py-4 border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 flex justify-end">
                             <button
                                 onClick={handleCloseInstantModal}
-                                className="px-6 py-2 rounded-xl border border-gray-300 text-gray-700 font-semibold hover:bg-gray-100"
+                                className="px-6 py-2.5 rounded-xl border border-slate-300 dark:border-white/20 text-slate-700 dark:text-gray-300 font-bold text-sm hover:bg-slate-100 dark:hover:bg-white/10 transition-colors w-full sm:w-auto"
                             >
                                 Close
                             </button>

@@ -7,6 +7,7 @@ import {
     Save,
     CheckCircle2,
     XCircle,
+    Clock
 } from 'lucide-react';
 import { getInstructorMentorProfile } from '../services/instructorMentorProfileService';
 import {
@@ -180,73 +181,102 @@ const InstructorMentorship = () => {
     if (!user) return null;
 
     return (
-        <div className="flex h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-indigo-900 overflow-hidden">
+        <div className="flex h-screen bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans transition-colors duration-300 overflow-hidden relative">
+            
+            {/* ── Background Ambience ── */}
+            <div className="absolute inset-0 pointer-events-none opacity-0 dark:opacity-100 transition-opacity z-0">
+                <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600/5 dark:bg-[#8c30e8]/10 rounded-full blur-[120px]" />
+                <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-blue-500/5 dark:bg-[#8c30e8]/5 rounded-full blur-[120px]" />
+            </div>
+
             <InstructorSidebar activeTab="mentorship" />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 p-6">
-                    <h1 className="text-3xl font-bold text-white">Instructor Mentorship</h1>
-                    <p className="text-gray-400 mt-1">This area is separate from student mentorship. You can use mentorship tools now.</p>
-                </div>
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+                
+                {/* ── Top Bar ── */}
+                <header className="bg-white/80 dark:bg-[#0f0a16]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 p-6 z-20 sticky top-0 transition-colors">
+                    <div className="max-w-6xl mx-auto flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-serif font-bold tracking-tight text-slate-900 dark:text-white">
+                                Instructor Mentorship
+                            </h1>
+                            <p className="text-sm font-medium text-slate-500 dark:text-gray-400 mt-1">
+                                Manage your availability and student sessions
+                            </p>
+                        </div>
+                    </div>
+                </header>
 
-                <div className="flex-1 overflow-y-auto p-6">
-                    <div className="max-w-4xl mx-auto space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                {/* ── Main Content ── */}
+                <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+                    <div className="max-w-6xl mx-auto space-y-6">
+                        
+                        {/* Tab Navigation */}
+                        <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-xl p-1.5 flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-1 mb-6">
                             <button
                                 onClick={() => setActivePanel('sessions')}
-                                className={`rounded-xl px-4 py-3 font-semibold border transition-colors ${
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold tracking-wide transition-all duration-200 ${
                                     activePanel === 'sessions'
-                                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white border-transparent'
-                                        : 'bg-white/10 text-gray-300 border-white/15 hover:bg-white/15'
+                                        ? 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8] dark:text-white shadow-sm'
+                                        : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
                                 }`}
                             >
                                 Sessions
                             </button>
                             <button
                                 onClick={() => setActivePanel('requests')}
-                                className={`rounded-xl px-4 py-3 font-semibold border transition-colors ${
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold tracking-wide transition-all duration-200 ${
                                     activePanel === 'requests'
-                                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white border-transparent'
-                                        : 'bg-white/10 text-gray-300 border-white/15 hover:bg-white/15'
+                                        ? 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8] dark:text-white shadow-sm'
+                                        : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
                                 }`}
                             >
                                 Session Requests
+                                {sessionRequests.length > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400 text-[10px]">
+                                        {sessionRequests.length}
+                                    </span>
+                                )}
                             </button>
                             <button
                                 onClick={() => setActivePanel('availability')}
-                                className={`rounded-xl px-4 py-3 font-semibold border transition-colors ${
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold tracking-wide transition-all duration-200 ${
                                     activePanel === 'availability'
-                                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white border-transparent'
-                                        : 'bg-white/10 text-gray-300 border-white/15 hover:bg-white/15'
+                                        ? 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8] dark:text-white shadow-sm'
+                                        : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
                                 }`}
                             >
                                 Availability
                             </button>
                         </div>
 
+                        {/* ── Sessions Panel ── */}
                         {activePanel === 'sessions' && (
-                            <div className="space-y-5">
-                                <div className="rounded-2xl p-5 border border-white/15 bg-white/10">
-                                    <h3 className="text-white font-bold text-xl mb-4">Upcoming Sessions</h3>
-                                    <div className="space-y-3">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                {/* Upcoming Sessions */}
+                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Upcoming Sessions</h3>
+                                    <div className="space-y-4">
                                         {upcomingSessions.map((session) => (
-                                            <div key={session.id} className="rounded-xl p-4 border border-white/10 bg-black/20 flex items-center justify-between gap-4">
+                                            <div key={session.id} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-5 hover:border-purple-200 dark:hover:border-[#8c30e8]/30 transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                                                 <div>
-                                                    <p className="text-white font-semibold">{session.student}</p>
-                                                    <p className="text-purple-200 text-sm">{session.subject}</p>
-                                                    <p className="text-gray-400 text-sm mt-1">{session.time} • {session.mode}</p>
+                                                    <p className="font-bold text-slate-900 dark:text-white text-base">{session.student}</p>
+                                                    <p className="text-sm font-medium text-slate-500 dark:text-gray-400 mt-1">{session.subject}</p>
+                                                    <div className="flex items-center gap-1.5 mt-2">
+                                                        <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-[#8c30e8]" />
+                                                        <p className="text-xs font-bold text-purple-600 dark:text-[#8c30e8]">{session.time}</p>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-2">
-                                                    {session.canJoinNow && (
+                                                <div className="flex flex-col items-end gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                                                    {session.canJoinNow ? (
                                                         <button
                                                             onClick={() => handleTakeSession(session)}
-                                                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600"
+                                                            className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white transition-colors shadow-md"
                                                         >
                                                             Take Session
                                                         </button>
-                                                    )}
-                                                    {!session.canJoinNow && (
-                                                        <span className="px-3 py-1 rounded-lg text-xs bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
+                                                    ) : (
+                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10">
                                                             {session.status}
                                                         </span>
                                                     )}
@@ -254,25 +284,29 @@ const InstructorMentorship = () => {
                                             </div>
                                         ))}
                                         {upcomingSessions.length === 0 && (
-                                            <div className="rounded-xl p-4 border border-white/10 bg-black/20 text-sm text-gray-300">
+                                            <div className="rounded-xl p-8 border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
                                                 No upcoming sessions yet. Accept student requests to schedule sessions.
                                             </div>
                                         )}
                                     </div>
                                 </div>
 
-                                <div className="rounded-2xl p-5 border border-white/15 bg-white/10">
-                                    <h3 className="text-white font-bold text-xl mb-4">Recent Sessions (Top 3)</h3>
-                                    <div className="space-y-3">
+                                {/* Recent Sessions */}
+                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Recent Sessions (Top 3)</h3>
+                                    <div className="space-y-4">
                                         {recentSessions.map((session) => (
-                                            <div key={`recent-${session.id}`} className="rounded-xl p-4 border border-white/10 bg-black/20">
-                                                <p className="text-white font-semibold">{session.student}</p>
-                                                <p className="text-purple-200 text-sm">{session.subject}</p>
-                                                <p className="text-gray-400 text-sm mt-1">{session.time} • {session.mode || 'Video'}</p>
+                                            <div key={`recent-${session.id}`} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-5 hover:border-slate-200 dark:hover:border-white/10 transition-all">
+                                                <p className="font-bold text-slate-900 dark:text-white text-base">{session.student}</p>
+                                                <p className="text-sm font-medium text-slate-500 dark:text-gray-400 mt-1">{session.subject}</p>
+                                                <div className="flex items-center gap-1.5 mt-2">
+                                                    <Clock className="w-3.5 h-3.5 text-slate-400 dark:text-gray-500" />
+                                                    <p className="text-xs font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">{session.time}</p>
+                                                </div>
                                             </div>
                                         ))}
                                         {recentSessions.length === 0 && (
-                                            <div className="rounded-xl p-4 border border-white/10 bg-black/20 text-sm text-gray-300">
+                                            <div className="rounded-xl p-8 border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
                                                 No recent sessions yet.
                                             </div>
                                         )}
@@ -281,32 +315,39 @@ const InstructorMentorship = () => {
                             </div>
                         )}
 
+                        {/* ── Requests Panel ── */}
                         {activePanel === 'requests' && (
-                            <div className="rounded-2xl p-5 border border-white/15 bg-white/10">
-                                <h3 className="text-white font-bold text-xl mb-4">Session Requests</h3>
-                                <div className="space-y-3">
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Session Requests</h3>
+                                <div className="space-y-4">
                                     {sessionRequests.map((request) => (
-                                        <div key={request.id} className="rounded-xl p-4 border border-white/10 bg-black/20">
-                                            <div className="flex items-start justify-between gap-4">
-                                                <div>
-                                                    <p className="text-white font-semibold">{request.student}</p>
-                                                    <p className="text-purple-200 text-sm">{request.subject}</p>
-                                                    <p className="text-gray-400 text-sm mt-1">Preferred: {request.preferred}</p>
-                                                    <p className="text-gray-300 text-sm mt-2 italic">"{request.message}"</p>
+                                        <div key={request.id} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-5 transition-all hover:border-slate-200 dark:hover:border-white/10">
+                                            <div className="flex-1">
+                                                <p className="font-bold text-slate-900 dark:text-white text-base">{request.student}</p>
+                                                <p className="text-sm font-medium text-slate-500 dark:text-gray-400 mt-0.5">{request.subject}</p>
+                                                <p className="text-xs font-bold text-purple-600 dark:text-[#8c30e8] mt-2">Preferred: {request.preferred}</p>
+                                                <div className="text-sm text-slate-700 dark:text-gray-300 mt-3 italic bg-white dark:bg-[#1a1524] p-3 rounded-lg border border-slate-200 dark:border-white/5">
+                                                    "{request.message}"
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button onClick={() => handleAcceptRequest(request.id)} className="px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 hover:bg-emerald-500/30">
-                                                        <CheckCircle2 className="w-4 h-4 inline mr-1" /> Accept
-                                                    </button>
-                                                    <button onClick={() => handleDeclineRequest(request.id)} className="px-3 py-2 rounded-lg bg-red-500/20 border border-red-400/30 text-red-300 hover:bg-red-500/30">
-                                                        <XCircle className="w-4 h-4 inline mr-1" /> Decline
-                                                    </button>
-                                                </div>
+                                            </div>
+                                            <div className="flex flex-row md:flex-col gap-3 w-full md:w-auto">
+                                                <button 
+                                                    onClick={() => handleAcceptRequest(request.id)} 
+                                                    className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20 dark:hover:bg-green-500/20 text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+                                                >
+                                                    <CheckCircle2 className="w-4 h-4" /> Accept
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeclineRequest(request.id)} 
+                                                    className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/20 text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+                                                >
+                                                    <XCircle className="w-4 h-4" /> Decline
+                                                </button>
                                             </div>
                                         </div>
                                     ))}
                                     {sessionRequests.length === 0 && (
-                                        <div className="rounded-xl p-4 border border-white/10 bg-black/20 text-sm text-gray-300">
+                                        <div className="rounded-xl p-10 border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
                                             No pending requests right now.
                                         </div>
                                     )}
@@ -314,22 +355,25 @@ const InstructorMentorship = () => {
                             </div>
                         )}
 
+                        {/* ── Availability Panel ── */}
                         {activePanel === 'availability' && (
-                            <div className="rounded-2xl p-5 border border-white/15 bg-white/10 space-y-4">
-                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                    <h3 className="text-white font-bold text-xl">
-                                        <CalendarDays className="w-5 h-5 inline mr-2 text-purple-300" /> Set Availability (1-hour slots)
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                
+                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/10">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <CalendarDays className="w-5 h-5 text-purple-600 dark:text-[#8c30e8]" /> 
+                                        Set Availability (1-hour slots)
                                     </h3>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <button
                                             onClick={() => toggleAllDays(true)}
-                                            className="px-3 py-2 rounded-lg border border-white/15 text-gray-200 bg-white/10 hover:bg-white/20 text-sm"
+                                            className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-sm font-bold transition-colors"
                                         >
                                             All Days Full Day
                                         </button>
                                         <button
                                             onClick={() => toggleAllDays(false)}
-                                            className="px-3 py-2 rounded-lg border border-white/15 text-gray-200 bg-white/10 hover:bg-white/20 text-sm"
+                                            className="px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 bg-slate-50 hover:bg-slate-100 dark:bg-white/5 dark:hover:bg-white/10 text-sm font-bold transition-colors"
                                         >
                                             Clear All
                                         </button>
@@ -343,103 +387,105 @@ const InstructorMentorship = () => {
                                                     alert('Failed to save availability.');
                                                 }
                                             }}
-                                            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold hover:from-blue-600 hover:to-purple-700"
+                                            className="px-6 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white font-bold transition-colors shadow-md flex items-center gap-2 text-sm"
                                         >
-                                            <Save className="w-4 h-4 inline mr-2" /> Save
+                                            <Save className="w-4 h-4" /> Save
                                         </button>
                                     </div>
                                 </div>
 
-                                {WEEK_DAYS.map((dayKey) => {
-                                    const activeSlots = sortSlotsByHour(weeklyAvailability[dayKey] || []);
-                                    const dayEnabled = activeSlots.length > 0;
-                                    const fullDay = activeSlots.length === HOURLY_SLOT_OPTIONS.length;
+                                <div className="space-y-4">
+                                    {WEEK_DAYS.map((dayKey) => {
+                                        const activeSlots = sortSlotsByHour(weeklyAvailability[dayKey] || []);
+                                        const dayEnabled = activeSlots.length > 0;
+                                        const fullDay = activeSlots.length === HOURLY_SLOT_OPTIONS.length;
 
-                                    const toggleDay = () => {
-                                        setWeeklyAvailability((prev) => ({
-                                            ...prev,
-                                            [dayKey]: dayEnabled ? [] : ['9:00 AM', '10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM'],
-                                        }));
-                                    };
-
-                                    const toggleFullDay = () => {
-                                        setWeeklyAvailability((prev) => ({
-                                            ...prev,
-                                            [dayKey]: fullDay ? [] : [...HOURLY_SLOT_OPTIONS],
-                                        }));
-                                    };
-
-                                    const toggleSlot = (slot) => {
-                                        setWeeklyAvailability((prev) => {
-                                            const current = prev[dayKey] || [];
-                                            const exists = current.includes(slot);
-                                            return {
+                                        const toggleDay = () => {
+                                            setWeeklyAvailability((prev) => ({
                                                 ...prev,
-                                                [dayKey]: exists ? current.filter((item) => item !== slot) : sortSlotsByHour([...current, slot]),
-                                            };
-                                        });
-                                    };
+                                                [dayKey]: dayEnabled ? [] : ['9:00 AM', '10:00 AM', '11:00 AM', '2:00 PM', '3:00 PM'],
+                                            }));
+                                        };
 
-                                    return (
-                                        <div key={dayKey} className="rounded-xl border border-white/10 p-4 bg-black/20">
-                                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
-                                                <div className="text-white font-semibold">{dayLabels[dayKey]}</div>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={toggleDay}
-                                                        className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                                                            dayEnabled
-                                                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
-                                                                : 'bg-white/10 text-gray-300 border-white/15'
-                                                        }`}
-                                                    >
-                                                        {dayEnabled ? 'Available' : 'Unavailable'}
-                                                    </button>
-                                                    <button
-                                                        onClick={toggleFullDay}
-                                                        className={`px-3 py-1.5 rounded-lg text-sm font-semibold border ${
-                                                            fullDay
-                                                                ? 'bg-purple-600 text-white border-purple-500'
-                                                                : 'bg-white/10 text-gray-300 border-white/15'
-                                                        }`}
-                                                    >
-                                                        {fullDay ? 'Full Day On' : 'Set Full Day'}
-                                                    </button>
+                                        const toggleFullDay = () => {
+                                            setWeeklyAvailability((prev) => ({
+                                                ...prev,
+                                                [dayKey]: fullDay ? [] : [...HOURLY_SLOT_OPTIONS],
+                                            }));
+                                        };
+
+                                        const toggleSlot = (slot) => {
+                                            setWeeklyAvailability((prev) => {
+                                                const current = prev[dayKey] || [];
+                                                const exists = current.includes(slot);
+                                                return {
+                                                    ...prev,
+                                                    [dayKey]: exists ? current.filter((item) => item !== slot) : sortSlotsByHour([...current, slot]),
+                                                };
+                                            });
+                                        };
+
+                                        return (
+                                            <div key={dayKey} className="rounded-2xl border border-slate-200 dark:border-white/10 p-5 bg-slate-50 dark:bg-black/20">
+                                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+                                                    <div className="text-slate-900 dark:text-white font-bold text-lg capitalize">{dayLabels[dayKey]}</div>
+                                                    <div className="flex items-center gap-3">
+                                                        <button
+                                                            onClick={toggleDay}
+                                                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                                                                dayEnabled
+                                                                    ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/30'
+                                                                    : 'bg-white border-slate-200 text-slate-500 dark:bg-white/5 dark:text-gray-400 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10'
+                                                            }`}
+                                                        >
+                                                            {dayEnabled ? 'Available' : 'Unavailable'}
+                                                        </button>
+                                                        <button
+                                                            onClick={toggleFullDay}
+                                                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                                                                fullDay
+                                                                    ? 'bg-purple-600 text-white border-purple-600 dark:bg-[#8c30e8] dark:border-[#8c30e8]'
+                                                                    : 'bg-white border-slate-200 text-slate-500 dark:bg-white/5 dark:text-gray-400 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10'
+                                                            }`}
+                                                        >
+                                                            {fullDay ? 'Full Day On' : 'Set Full Day'}
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                            {dayEnabled && (
-                                                <>
-                                                    <div className="text-xs text-gray-400 mb-2">
-                                                        Select 1-hour slots ({activeSlots.length} selected)
+                                                {dayEnabled && (
+                                                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5">
+                                                        <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-3">
+                                                            Select 1-hour slots ({activeSlots.length} selected)
+                                                        </div>
+                                                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+                                                            {HOURLY_SLOT_OPTIONS.map((slot) => {
+                                                                const selected = activeSlots.includes(slot);
+                                                                return (
+                                                                    <button
+                                                                        key={`${dayKey}-${slot}`}
+                                                                        onClick={() => toggleSlot(slot)}
+                                                                        className={`px-3 py-2.5 rounded-xl text-sm font-bold border transition-all ${
+                                                                            selected
+                                                                                ? 'bg-purple-600 text-white border-purple-600 dark:bg-[#8c30e8] dark:border-[#8c30e8] shadow-sm'
+                                                                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-[#1a1524] dark:text-gray-300 dark:border-white/10 dark:hover:bg-white/10'
+                                                                        }`}
+                                                                    >
+                                                                        {slot}
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
                                                     </div>
-                                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-                                                        {HOURLY_SLOT_OPTIONS.map((slot) => {
-                                                            const selected = activeSlots.includes(slot);
-                                                            return (
-                                                                <button
-                                                                    key={`${dayKey}-${slot}`}
-                                                                    onClick={() => toggleSlot(slot)}
-                                                                    className={`px-2.5 py-1.5 rounded-lg text-xs border ${
-                                                                        selected
-                                                                            ? 'bg-purple-600 text-white border-purple-500'
-                                                                            : 'bg-white/5 text-gray-300 border-white/10'
-                                                                    }`}
-                                                                >
-                                                                    {slot}
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         )}
                     </div>
-                </div>
+                </main>
             </div>
         </div>
     );

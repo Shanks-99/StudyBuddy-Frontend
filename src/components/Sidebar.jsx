@@ -13,8 +13,7 @@ import {
     UserPlus,
     Headphones,
     ChevronLeft,
-    ChevronRight,
-    Menu
+    Sparkles // Added for the logo UI
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -43,83 +42,151 @@ const Sidebar = () => {
         setIsExpanded(!isExpanded);
     };
 
-    return (
-        <div
-            className={`${isExpanded ? 'w-64' : 'w-20'
-                } bg-black/30 backdrop-blur-xl border-r border-white/10 flex flex-col transition-all duration-300 ease-in-out relative`}
-        >
-            {/* Toggle Button */}
-            <button
-                onClick={toggleSidebar}
-                className="absolute -right-3 top-8 bg-purple-600 rounded-full p-1 text-white shadow-lg hover:bg-purple-700 transition-colors z-50 border border-white/20"
-            >
-                {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-            </button>
+    // Styling logic ko match karne ke liye isExpanded ko isCollapsed mein map kiya hai
+    const isCollapsed = !isExpanded;
 
-            {/* Logo */}
-            <div className={`p-6 border-b border-white/10 flex items-center ${isExpanded ? 'justify-between' : 'justify-center'}`}>
-                {isExpanded ? (
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent whitespace-nowrap overflow-hidden">
-                        StudyBuddy
-                    </h1>
-                ) : (
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold">
-                        SB
-                    </div>
-                )}
+    return (
+        <aside
+            aria-label="Student Sidebar Navigation"
+            className={`
+                relative flex flex-col h-screen
+                bg-background dark:bg-[#0a0a0f] border-r border-border dark:border-white/[0.06]
+                text-muted-foreground dark:text-slate-300 transition-all duration-300 ease-in-out
+                ${isCollapsed ? "w-20" : "w-72"}
+            `}
+        >
+            {/* ── Header ── */}
+            <div
+                className={`flex items-center h-16 px-4 border-b border-border dark:border-white/[0.06] ${
+                    isCollapsed ? "justify-center" : "justify-between"
+                }`}
+            >
+                <div className={`flex items-center gap-2 overflow-hidden ${isCollapsed ? "justify-center" : ""}`}>
+                    <Sparkles size={22} className="text-purple-600 dark:text-purple-400 shrink-0" aria-hidden="true" />
+                    {!isCollapsed && (
+                        <span className="font-bold text-lg tracking-wide text-foreground dark:text-white whitespace-nowrap">
+                            StudyBuddy
+                        </span>
+                    )}
+                </div>
+
+                <button
+                    onClick={toggleSidebar}
+                    className={`
+                        p-1.5 rounded-lg text-muted-foreground dark:text-slate-400 hover:text-foreground dark:hover:text-white
+                        hover:bg-slate-100 dark:hover:bg-white/10 transition-colors
+                        ${isCollapsed ? "absolute -right-3 top-5 bg-background dark:bg-[#0a0a0f] border border-border dark:border-white/10 shadow-lg z-10" : ""}
+                    `}
+                    aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                    aria-expanded={!isCollapsed}
+                >
+                    <ChevronLeft
+                        size={18}
+                        className={`transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`}
+                        aria-hidden="true"
+                    />
+                </button>
             </div>
 
-            {/* Navigation */}
-            <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto overflow-x-hidden scrollbar-hide">
+            {/* ── Navigation ── */}
+            <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar" aria-label="Main Navigation">
                 {sidebarItems.map((item) => {
                     const isActive = location.pathname === item.id;
+
                     return (
                         <button
                             key={item.id}
                             onClick={() => navigate(item.id)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 text-sm group relative ${isActive
-                                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg shadow-purple-500/50'
-                                    : 'text-gray-300 hover:bg-white/10 hover:text-white'
-                                } ${!isExpanded && 'justify-center'}`}
-                            title={!isExpanded ? item.label : ''}
+                            aria-current={isActive ? 'page' : undefined}
+                            className={`
+                                w-full group relative flex items-center gap-3 rounded-xl
+                                transition-all duration-200 overflow-hidden
+                                ${isCollapsed ? "justify-center px-0 py-3" : "px-4 py-3"}
+                                ${
+                                    isActive
+                                        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:shadow-[inset_0_0_20px_rgba(140,48,232,0.08)]"
+                                        : "text-muted-foreground dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white"
+                                }
+                            `}
                         >
-                            <item.icon className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-white'}`} />
+                            {/* Active indicator bar */}
+                            {isActive && (
+                                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-6 rounded-r-full bg-purple-600 dark:bg-purple-400" aria-hidden="true" />
+                            )}
 
-                            {isExpanded && (
-                                <span className="font-medium whitespace-nowrap overflow-hidden transition-opacity duration-200">
+                            <item.icon
+                                size={20}
+                                className={`shrink-0 ${
+                                    isActive
+                                        ? "text-purple-600 dark:text-purple-400"
+                                        : "group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors"
+                                }`}
+                                aria-hidden="true"
+                            />
+
+                            {/* Label */}
+                            {!isCollapsed && (
+                                <span className="text-sm font-medium whitespace-nowrap">
                                     {item.label}
                                 </span>
                             )}
 
-                            {/* Tooltip for collapsed state */}
-                            {!isExpanded && (
-                                <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-white/10">
+                            {/* Tooltip (collapsed) */}
+                            {isCollapsed && (
+                                <span
+                                    role="tooltip"
+                                    className="
+                                        pointer-events-none absolute left-full ml-3
+                                        whitespace-nowrap rounded-lg
+                                        bg-slate-800 dark:bg-slate-900 px-3 py-1.5
+                                        text-xs font-medium text-white
+                                        shadow-xl border border-border dark:border-white/10
+                                        opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
+                                        transition-all duration-200 z-50
+                                    "
+                                >
                                     {item.label}
-                                </div>
+                                </span>
                             )}
                         </button>
                     );
                 })}
             </nav>
 
-            {/* Logout */}
-            <div className="p-3 border-t border-white/10">
+            {/* ── Bottom Actions (Logout) ── */}
+            <div className="px-3 pb-4 border-t border-border dark:border-white/[0.06] pt-3 space-y-1">
                 <button
                     onClick={handleLogout}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-red-400 hover:bg-red-500/20 transition-all duration-200 text-sm group relative ${!isExpanded && 'justify-center'}`}
-                    title={!isExpanded ? 'Logout' : ''}
+                    aria-label="Logout from account"
+                    className={`
+                        group relative flex items-center gap-3 w-full rounded-xl
+                        text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300
+                        transition-colors
+                        ${isCollapsed ? "justify-center px-0 py-3" : "px-4 py-3"}
+                    `}
                 >
-                    <LogOut className="w-5 h-5 flex-shrink-0" />
-                    {isExpanded && <span className="font-medium whitespace-nowrap">Logout</span>}
+                    <LogOut size={18} className="shrink-0" aria-hidden="true" />
+                    {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
 
-                    {!isExpanded && (
-                        <div className="absolute left-full ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-white/10">
+                    {isCollapsed && (
+                        <span
+                            role="tooltip"
+                            className="
+                                pointer-events-none absolute left-full ml-3
+                                whitespace-nowrap rounded-lg
+                                bg-slate-800 dark:bg-slate-900 px-3 py-1.5
+                                text-xs font-medium text-white
+                                shadow-xl border border-border dark:border-white/10
+                                opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0
+                                transition-all duration-200 z-50
+                            "
+                        >
                             Logout
-                        </div>
+                        </span>
                     )}
                 </button>
             </div>
-        </div>
+        </aside>
     );
 };
 

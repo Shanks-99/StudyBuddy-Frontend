@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
-import { Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, Monitor, MonitorOff } from 'lucide-react';
+import { Mic, MicOff, Video as VideoIcon, VideoOff, PhoneOff, Monitor, MonitorOff, Loader2 } from 'lucide-react';
 
 const isLocalhost =
     typeof window !== 'undefined' &&
@@ -484,7 +484,6 @@ const MentorshipCall = () => {
 
             setIsVideoMuted(newVideoTrack ? !newVideoTrack.enabled : false);
 
-
             if (peerRef.current && !peerRef.current.destroyed) {
                 const peerConnection = peerRef.current._pc;
 
@@ -652,106 +651,145 @@ const MentorshipCall = () => {
         setIsVideoMuted(!videoTrack.enabled);
     };
 
+    // ── Loading View ──
     if (isLoading) {
         return (
-            <div className="h-screen bg-gray-950 text-white flex items-center justify-center">
-                <div className="text-lg">Joining session...</div>
+            <div className="flex h-[100dvh] items-center justify-center bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans">
+                <div className="flex items-center gap-3 text-purple-600 dark:text-[#8c30e8] font-bold tracking-wide">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                    Joining session...
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="h-[100dvh] w-full bg-gray-950 text-white flex flex-col overflow-hidden">
-            <div className="px-6 py-4 border-b border-white/10 bg-black/30 flex items-center justify-between shrink-0">
+        <div className="h-[100dvh] w-full flex flex-col font-sans transition-colors duration-300 bg-slate-50 text-slate-900 dark:bg-[#0f0a16] dark:text-white relative overflow-hidden">
+            
+            {/* ── Background Ambience ── */}
+            <div className="absolute inset-0 pointer-events-none opacity-0 dark:opacity-100 transition-opacity">
+                <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-purple-600/5 dark:bg-[#8c30e8]/10 rounded-full blur-[120px]" />
+                <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-purple-600/5 dark:bg-[#8c30e8]/5 rounded-full blur-[120px]" />
+            </div>
+
+            {/* ── Header ── */}
+            <header className="relative z-20 flex items-center justify-between px-4 md:px-6 py-3 border-b backdrop-blur-md transition-colors bg-white/80 border-slate-200 dark:bg-[#0f0a16]/80 dark:border-white/5">
                 <div>
-                    <h1 className="text-xl font-bold">Mentorship Session Call</h1>
-                    <p className="text-sm text-gray-400">1 to 1 Mentorship Session</p>
+                    <h1 className="text-sm md:text-lg font-bold text-slate-900 dark:text-white">Mentorship Session Call</h1>
+                    <p className="text-xs text-slate-500 dark:text-white/40">1 to 1 Mentorship Session</p>
                 </div>
                 <button
                     onClick={leaveCall}
-                    className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold"
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 border border-red-200 dark:border-red-500/30 text-sm font-bold transition-all"
                 >
-                    Leave Call
+                    <PhoneOff size={16} />
+                    <span className="hidden sm:inline">Leave Call</span>
                 </button>
-            </div>
+            </header>
 
-            <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 overflow-hidden">
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gray-900">
-                    <video ref={localVideoRef} muted autoPlay playsInline className="w-full h-full object-cover" />
-                    {!hasLocalStream && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-gray-900 text-gray-300 px-4 text-center">
-                            <div>Camera preview unavailable</div>
-                            {mediaError && (
-                                <button
-                                    onClick={requestLocalMedia}
-                                    className="px-3 py-2 rounded-lg bg-white/10 border border-white/20 hover:bg-white/20 text-sm"
-                                >
-                                    Retry Camera
-                                </button>
-                            )}
+            {/* ── Main Video Area ── */}
+            <main className="relative z-10 flex-1 flex flex-col min-h-0">
+                <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 lg:p-6 bg-slate-100/50 dark:bg-[#130d1a]/50 backdrop-blur-sm">
+                    
+                    {/* Local Video */}
+                    <div className="relative rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 shadow-sm group">
+                        <video ref={localVideoRef} muted autoPlay playsInline className="w-full h-full object-cover" />
+                        
+                        {!hasLocalStream && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-purple-50 dark:bg-[#8c30e8]/10 text-purple-600 dark:text-white/40 px-4 text-center">
+                                <div className="font-medium text-sm">Camera preview unavailable</div>
+                                {mediaError && (
+                                    <button
+                                        onClick={requestLocalMedia}
+                                        className="px-4 py-2 rounded-xl bg-purple-100 dark:bg-white/10 border border-purple-200 dark:border-white/20 hover:bg-purple-200 dark:hover:bg-white/20 text-sm font-bold transition-colors"
+                                    >
+                                        Retry Camera
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                        
+                        {isVideoMuted && hasLocalStream && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-100 dark:bg-zinc-900 text-slate-500 dark:text-white/40">
+                                <VideoOff size={32} className="opacity-50" />
+                                <span className="text-sm font-medium">Camera is off</span>
+                            </div>
+                        )}
+                        
+                        <div className="absolute bottom-3 left-3 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md bg-white/80 text-slate-900 dark:bg-black/50 dark:text-white shadow-sm border border-slate-200 dark:border-white/10">
+                            {user?.name || 'You'} (You)
                         </div>
-                    )}
-                    {isVideoMuted && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300">
-                            Camera is off
-                        </div>
-                    )}
-                    <div className="absolute bottom-3 left-3 px-3 py-1 rounded-lg bg-black/60 text-sm">
-                        {user?.name || 'You'} (You)
+                    </div>
+
+                    {/* Remote Video */}
+                    <div className="relative rounded-2xl overflow-hidden bg-white dark:bg-zinc-900 border border-slate-200 dark:border-white/10 shadow-sm group">
+                        <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                        
+                        {!otherParticipant && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50 dark:bg-zinc-900/80 text-slate-500 dark:text-white/40">
+                                <Loader2 className="w-8 h-8 animate-spin opacity-50" />
+                                <span className="text-sm font-medium">Waiting for the other participant...</span>
+                            </div>
+                        )}
+                        
+                        {otherParticipant && !hasRemoteStream && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-50 dark:bg-zinc-900/80 text-slate-500 dark:text-white/40">
+                                <Loader2 className="w-8 h-8 animate-spin opacity-50" />
+                                <span className="text-sm font-medium">Connecting to {otherParticipant.name}'s video...</span>
+                            </div>
+                        )}
+                        
+                        {otherParticipant && (
+                            <div className="absolute bottom-3 left-3 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md bg-white/80 text-slate-900 dark:bg-black/50 dark:text-white shadow-sm border border-slate-200 dark:border-white/10">
+                                {otherParticipant.name}
+                            </div>
+                        )}
                     </div>
                 </div>
 
-                <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-gray-900">
-                    <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                    {!otherParticipant && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300">
-                            Waiting for the other participant...
-                        </div>
-                    )}
-                    {otherParticipant && !hasRemoteStream && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-gray-300">
-                            Connecting to {otherParticipant.name}'s video...
-                        </div>
-                    )}
-                    <div className="absolute bottom-3 left-3 px-3 py-1 rounded-lg bg-black/60 text-sm">
-                        {otherParticipant?.name || 'Participant'}
+                {/* ── Floating Bottom Controls ── */}
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30">
+                    <div className="flex items-center gap-2 px-4 py-2.5 rounded-2xl shadow-2xl border backdrop-blur-xl transition-colors bg-white/90 border-slate-200 dark:bg-[#191121]/90 dark:border-white/10">
+                        <button
+                            onClick={toggleAudio}
+                            title={isAudioMuted ? 'Unmute microphone' : 'Mute microphone'}
+                            className={`p-3 rounded-xl transition-all duration-200 ${
+                                !isAudioMuted
+                                    ? 'bg-transparent text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white'
+                                    : 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                            }`}
+                        >
+                            {isAudioMuted ? <MicOff size={20} /> : <Mic size={20} />}
+                        </button>
+                        
+                        <button
+                            onClick={toggleVideo}
+                            title={isVideoMuted ? 'Turn on camera' : 'Turn off camera'}
+                            className={`p-3 rounded-xl transition-all duration-200 ${
+                                !isVideoMuted
+                                    ? 'bg-transparent text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white'
+                                    : 'bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/20 dark:text-red-400 dark:hover:bg-red-500/30'
+                            }`}
+                        >
+                            {isVideoMuted ? <VideoOff size={20} /> : <VideoIcon size={20} />}
+                        </button>
+                        
+                        <div className="w-px h-8 bg-slate-200 dark:bg-white/10 mx-1" />
+                        
+                        <button
+                            onClick={toggleScreenShare}
+                            title={isScreenSharing ? 'Stop screen sharing' : 'Share your screen'}
+                            className={`p-3 rounded-xl transition-all duration-200 ${
+                                isScreenSharing
+                                    ? 'bg-purple-600 text-white dark:bg-[#8c30e8] shadow-md shadow-purple-500/20 hover:brightness-110'
+                                    : 'bg-transparent text-slate-600 hover:bg-slate-100 dark:text-gray-300 dark:hover:bg-white/10 dark:hover:text-white'
+                            }`}
+                        >
+                            {isScreenSharing ? <MonitorOff size={20} /> : <Monitor size={20} />}
+                        </button>
                     </div>
                 </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-white/10 bg-gray-950/95 backdrop-blur shrink-0 flex items-center justify-center gap-4">
-                <button
-                    onClick={toggleAudio}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isAudioMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                >
-                    {isAudioMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                </button>
-                <button
-                    onClick={toggleVideo}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isVideoMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                >
-                    {isVideoMuted ? <VideoOff className="w-5 h-5" /> : <VideoIcon className="w-5 h-5" />}
-                </button>
-                <button
-                    onClick={toggleScreenShare}
-                    title={isScreenSharing ? 'Stop screen sharing' : 'Share your screen'}
-                    className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isScreenSharing ? 'bg-blue-600 hover:bg-blue-700' : 'bg-white/10 hover:bg-white/20'
-                    }`}
-                >
-                    {isScreenSharing ? <MonitorOff className="w-5 h-5" /> : <Monitor className="w-5 h-5" />}
-                </button>
-                <button
-                    onClick={leaveCall}
-                    className="w-12 h-12 rounded-full flex items-center justify-center bg-red-600 hover:bg-red-700"
-                >
-                    <PhoneOff className="w-5 h-5" />
-                </button>
-            </div>
+            </main>
         </div>
     );
 };
