@@ -40,12 +40,6 @@ const dayLabels = {
     sat: 'Saturday',
 };
 
-const toTitleCase = (value = '') => {
-    const normalized = String(value).trim();
-    if (!normalized) return '';
-    return normalized.charAt(0).toUpperCase() + normalized.slice(1).toLowerCase();
-};
-
 const InstructorMentorship = () => {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
@@ -197,11 +191,21 @@ const InstructorMentorship = () => {
 
             <InstructorSidebar activeTab="mentorship" />
 
-            <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="bg-black/20 backdrop-blur-xl border-b border-white/10 p-6">
-                    <h1 className="text-3xl font-bold text-white">Instructor Mentorship</h1>
-                    <p className="text-gray-400 mt-1">Guide learners with focused 1:1 sessions, shape their momentum, and track every milestone.</p>
-                </div>
+            <div className="flex-1 flex flex-col overflow-hidden relative z-10">
+                
+                {/* ── Top Bar ── */}
+                <header className="bg-white/80 dark:bg-[#0f0a16]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 p-6 z-20 sticky top-0 transition-colors">
+                    <div className="max-w-6xl mx-auto flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl md:text-3xl font-serif font-bold tracking-tight text-slate-900 dark:text-white">
+                                Instructor Mentorship
+                            </h1>
+                            <p className="text-sm font-medium text-slate-500 dark:text-gray-400 mt-1">
+                                Manage your availability and student sessions
+                            </p>
+                        </div>
+                    </div>
+                </header>
 
                 {/* ── Main Content ── */}
                 <main className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
@@ -272,9 +276,8 @@ const InstructorMentorship = () => {
                                                             Take Session
                                                         </button>
                                                     ) : (
-
-                                                        <span className="px-3 py-1 rounded-lg text-xs bg-emerald-500/20 border border-emerald-400/30 text-emerald-300">
-                                                            {toTitleCase(session.status)}
+                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10">
+                                                            {session.status}
                                                         </span>
                                                     )}
                                                 </div>
@@ -288,9 +291,10 @@ const InstructorMentorship = () => {
                                     </div>
                                 </div>
 
-                                <div className="rounded-2xl p-5 border border-white/15 bg-white/10">
-                                    <h3 className="text-white font-bold text-xl mb-4">Recent Sessions</h3>
-                                    <div className="space-y-3">
+                                {/* Recent Sessions */}
+                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Recent Sessions (Top 3)</h3>
+                                    <div className="space-y-4">
                                         {recentSessions.map((session) => (
                                             <div key={`recent-${session.id}`} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-5 hover:border-slate-200 dark:hover:border-white/10 transition-all">
                                                 <p className="font-bold text-slate-900 dark:text-white text-base">{session.student}</p>

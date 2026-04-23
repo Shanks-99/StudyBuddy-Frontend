@@ -209,7 +209,7 @@ const InstructorDashboard = () => {
 
             {/* Sidebar */}
             {/* Sidebar */}
-<InstructorSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+            <InstructorSidebar activeTab={activeTab} onTabChange={setActiveTab} />
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative z-10">

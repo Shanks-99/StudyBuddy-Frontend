@@ -36,19 +36,6 @@ const Login = () => {
     const navigate = useNavigate();
     const prefersReducedMotion = useReducedMotion();
 
-    const navigateByRole = (role) => {
-        if (role === 'teacher') {
-            navigate('/instructor-dashboard');
-        } else {
-            navigate('/student-dashboard');
-        }
-    };
-
-    const toggleRole = () => {
-        setIsTeacher((prev) => !prev);
-        setApiError('');
-    };
-
     const validateEmail = (email) => {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         return emailRegex.test(email);
@@ -114,16 +101,19 @@ const Login = () => {
             }
 
             // Redirect based on user's registered role
-            navigateByRole(response.role);
+            if (response.role === 'teacher') {
+                navigate('/instructor-dashboard');
+            } else {
+                navigate('/student-dashboard');
+            }
         } catch (err) {
             setApiError(err.response?.data?.msg || 'Login failed. Please try again.');
             setIsLoading(false);
         }
     };
 
-    // Google login placeholder - requires @react-oauth/google setup
-    const handleGoogleSuccess = async (credentialResponse) => {
-        setApiError('Google login is not configured yet.');
+    const toggleRole = () => {
+        setIsTeacher(!isTeacher);
     };
 
     return (
