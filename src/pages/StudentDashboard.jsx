@@ -120,7 +120,7 @@ const StudentDashboard = () => {
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Study Progress Widget */}
-                            <motion.div {...fadeIn} className="md:col-span-2 relative overflow-hidden bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-[2rem] p-8 group">
+                            <motion.div {...fadeIn} className="md:col-span-2 relative overflow-hidden bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-[2rem] p-8 group">
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/10 dark:bg-[#8c30e8]/20 rounded-full -mr-20 -mt-20 blur-[80px] group-hover:bg-purple-500/20 dark:group-hover:bg-[#8c30e8]/30 transition-all duration-700 pointer-events-none" />
                                 
                                 <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
@@ -172,7 +172,7 @@ const StudentDashboard = () => {
                             </motion.div>
 
                             {/* Upcoming Sessions */}
-                            <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-[2rem] p-6 flex flex-col">
+                            <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-[2rem] p-6 flex flex-col">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">Upcoming Sessions</h3>
                                     <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
@@ -205,7 +205,7 @@ const StudentDashboard = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             
                             {/* AI Content Generator */}
-                            <motion.div {...fadeIn} transition={{ delay: 0.2 }} className="lg:col-span-2 bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                            <motion.div {...fadeIn} transition={{ delay: 0.2 }} className="lg:col-span-2 bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6">
                                 <div className="flex items-center justify-between px-1 mb-6">
                                     <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                         AI Study Tools <Sparkles className="text-purple-600 dark:text-[#8c30e8]" size={20} />
@@ -237,7 +237,7 @@ const StudentDashboard = () => {
                             </motion.div>
 
                             {/* To-Do List */}
-                            <motion.div {...fadeIn} transition={{ delay: 0.3 }} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                            <motion.div {...fadeIn} transition={{ delay: 0.3 }} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">To-Do List</h3>
                                     <button className="p-1.5 bg-purple-50 dark:bg-[#8c30e8]/10 text-purple-600 dark:text-[#8c30e8] rounded-lg hover:bg-purple-100 dark:hover:bg-[#8c30e8]/20 transition-colors">

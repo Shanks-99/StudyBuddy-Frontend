@@ -199,7 +199,7 @@ const InstructorDashboard = () => {
     ];
 
     return (
-        <div className="flex h-screen bg-slate-50 dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans transition-colors duration-300 overflow-hidden relative">
+        <div className="flex h-screen bg-background dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans transition-colors duration-300 overflow-hidden relative">
             
             {/* Atmospheric Background */}
             <div className="absolute inset-0 pointer-events-none opacity-0 dark:opacity-100 transition-opacity z-0">
@@ -259,7 +259,7 @@ const InstructorDashboard = () => {
                         {/* Overview Stats */}
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
                             {overviewStats.map((stat, idx) => (
-                                <div key={idx} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-5 hover:-translate-y-1 transition-transform">
+                                <div key={idx} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-5 hover:-translate-y-1 transition-transform">
                                     <div className="flex items-center justify-between mb-3">
                                         <div className={`p-2.5 rounded-xl ${stat.color}`}>
                                             <stat.icon className="w-5 h-5" />
@@ -274,7 +274,7 @@ const InstructorDashboard = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             
                             {/* Upcoming Sessions */}
-                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 flex flex-col">
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex flex-col">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">Upcoming Sessions</h3>
                                     <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
@@ -308,7 +308,7 @@ const InstructorDashboard = () => {
                             </div>
 
                             {/* Session Requests */}
-                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 flex flex-col">
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex flex-col">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">Session Requests</h3>
                                     <div className="p-2 bg-orange-50 dark:bg-orange-500/10 rounded-lg">
@@ -338,7 +338,7 @@ const InstructorDashboard = () => {
                             </div>
 
                             {/* Student Analytics */}
-                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 flex flex-col">
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex flex-col">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">Student Progress</h3>
                                     <div className="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
@@ -370,7 +370,7 @@ const InstructorDashboard = () => {
                             </div>
 
                             {/* Resource Management */}
-                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 lg:col-span-2">
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 lg:col-span-2">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white">My Resources</h3>
                                     <div className="p-2 bg-purple-50 dark:bg-[#8c30e8]/10 rounded-lg">
@@ -411,7 +411,7 @@ const InstructorDashboard = () => {
                             {/* Weekly Summary & Community Layout container */}
                             <div className="flex flex-col gap-6 lg:col-span-1">
                                 {/* Weekly Summary */}
-                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6">
                                     <div className="flex items-center justify-between mb-6">
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Weekly Summary</h3>
                                         <div className="p-2 bg-cyan-50 dark:bg-cyan-500/10 rounded-lg">
@@ -435,7 +435,7 @@ const InstructorDashboard = () => {
                                 </div>
 
                                 {/* Community Interaction */}
-                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 flex-1">
+                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex-1">
                                     <div className="flex items-center justify-between mb-6">
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white">Community Activity</h3>
                                         <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg">
