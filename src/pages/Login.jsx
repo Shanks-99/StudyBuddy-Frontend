@@ -29,7 +29,6 @@ const Login = () => {
         email: '',
         password: ''
     });
-    const [isTeacher, setIsTeacher] = useState(false);
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -88,32 +87,16 @@ const Login = () => {
         try {
             const response = await login(formData);
 
-            // Check if user's registered role matches the selected login mode
-            const expectedRole = isTeacher ? 'teacher' : 'student';
-            if (response.role !== expectedRole) {
-                if (response.role === 'teacher') {
-                    setApiError('This account is registered as a Teacher. Please use "Login as Teacher" option.');
-                } else {
-                    setApiError('This account is registered as a Student. Please use "Login as Student" option.');
-                }
-                setIsLoading(false);
-                return;
-            }
-
             // Redirect based on user's registered role
             if (response.role === 'teacher') {
                 navigate('/instructor-dashboard');
-            } else {
+            } else if (response.role === 'student') {
                 navigate('/student-dashboard');
             }
         } catch (err) {
             setApiError(err.response?.data?.msg || 'Login failed. Please try again.');
             setIsLoading(false);
         }
-    };
-
-    const toggleRole = () => {
-        setIsTeacher(!isTeacher);
     };
 
     return (
@@ -190,7 +173,7 @@ const Login = () => {
                         variants={fadeInUp}
                         className="text-sm text-slate-500 dark:text-gray-400 max-w-sm mx-auto font-medium"
                     >
-                        Login to access your <span className="font-bold text-purple-600 dark:text-[#8c30e8]">{isTeacher ? 'Instructor' : 'Student'}</span> dashboard
+                        Login to access your <span className="font-bold text-purple-600 dark:text-[#8c30e8]">dashboard</span>
                     </motion.p>
                 </motion.div>
 
@@ -265,21 +248,14 @@ const Login = () => {
                                 ) : (
                                     <div className="flex items-center justify-center gap-2">
                                         <LogIn className="w-5 h-5" />
-                                        Login Securely
+                                        Enter StudyBuddy
                                     </div>
                                 )}
                             </Button>
                         </motion.div>
 
-                        {/* Toggle Role & Register Links */}
+                        {/* Register Links */}
                         <motion.div variants={fadeInUp} className="text-center pt-4 border-t border-slate-100 dark:border-white/5 mt-6">
-                            <button
-                                type="button"
-                                onClick={toggleRole}
-                                className="text-sm font-bold text-purple-600 hover:text-purple-700 dark:text-[#8c30e8] dark:hover:text-[#a760eb] transition-colors mb-4 block w-full"
-                            >
-                                {isTeacher ? 'Wait, I am a Student' : 'Login as an Instructor'}
-                            </button>
                             <p className="text-slate-500 dark:text-gray-400 text-sm font-medium">
                                 Don't have an account?{' '}
                                 <Link to="/register" className="text-slate-900 dark:text-white hover:text-purple-600 dark:hover:text-[#8c30e8] font-bold transition-colors">
