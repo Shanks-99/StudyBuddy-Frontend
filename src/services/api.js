@@ -13,6 +13,8 @@ const defaultApiBaseUrl = isLocalhost
     ? localApiBaseUrl
     : (configuredApiUrl || remoteApiBaseUrl);
 
+console.log(`[API] Using base URL: ${defaultApiBaseUrl} (Environment: ${isLocalhost ? 'Local' : 'Production'})`);
+
 const api = axios.create({
     baseURL: defaultApiBaseUrl,
     headers: {

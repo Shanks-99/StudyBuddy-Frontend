@@ -86,10 +86,16 @@ const Login = () => {
                 const response = await loginWithGoogle({ 
                     idToken: tokenResponse.access_token
                 });
-                if (response.role === 'teacher') {
+                const userRole = (response.role || '').toLowerCase();
+                console.log("[Auth] Google Login Success. Role:", userRole);
+                
+                if (userRole === 'teacher') {
                     navigate('/instructor-dashboard');
-                } else {
+                } else if (userRole === 'student') {
                     navigate('/student-dashboard');
+                } else {
+                    console.warn("[Auth] Unknown role:", userRole);
+                    navigate('/student-dashboard'); // Default fallback
                 }
             } catch (err) {
                 setApiError(err.response?.data?.msg || 'Google login failed');
@@ -115,9 +121,15 @@ const Login = () => {
             const response = await login(formData);
 
             // Redirect based on user's registered role
-            if (response.role === 'teacher') {
+            const userRole = (response.role || '').toLowerCase();
+            console.log("[Auth] Login Success. Role:", userRole);
+
+            if (userRole === 'teacher') {
                 navigate('/instructor-dashboard');
-            } else if (response.role === 'student') {
+            } else if (userRole === 'student') {
+                navigate('/student-dashboard');
+            } else {
+                console.warn("[Auth] Unexpected role returned:", userRole);
                 navigate('/student-dashboard');
             }
         } catch (err) {

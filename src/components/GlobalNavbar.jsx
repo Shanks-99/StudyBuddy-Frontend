@@ -44,8 +44,13 @@ const GlobalNavbar = memo(function GlobalNavbar({ isDark, setIsDark }) {
     }, [location.pathname]);
 
     const fetchNotifications = async () => {
-        const data = await getNotifications();
-        setNotifications(data);
+        try {
+            const data = await getNotifications();
+            setNotifications(data || []);
+        } catch (error) {
+            console.error("[Navbar] Failed to fetch notifications:", error);
+            setNotifications([]);
+        }
     };
 
     const handleNotificationClick = async (notif) => {

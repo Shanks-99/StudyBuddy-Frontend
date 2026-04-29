@@ -93,8 +93,13 @@ const InstructorDashboard = () => {
                 return;
             }
 
-            if (currentUser.role !== 'teacher') {
+            if (currentUser.role === 'student') {
                 navigate('/student-dashboard');
+                return;
+            }
+
+            if (currentUser.role !== 'teacher') {
+                navigate('/login');
                 return;
             }
 
