@@ -211,7 +211,7 @@ const GlobalNavbar = memo(function GlobalNavbar({ isDark, setIsDark }) {
                                 {user.avatar ? (
                                     <img src={user.avatar} alt="Profile" className="w-full h-full object-cover" />
                                 ) : (
-                                    <span>{user.name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U'}</span>
+                                    <span>{(user.name || '').split(' ').filter(Boolean).map(n => n[0]).join('').toUpperCase() || 'U'}</span>
                                 )}
                             </button>
                         )}
