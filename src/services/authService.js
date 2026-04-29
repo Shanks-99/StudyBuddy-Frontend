@@ -3,11 +3,10 @@ import api from './api';
 const persistAuthData = (authPayload) => {
     if (!authPayload?.token) return;
 
-    localStorage.setItem('token', authPayload.token);
-    localStorage.setItem('user', JSON.stringify({
-        id: authPayload.id || authPayload._id,
-        name: authPayload.name,
-        role: authPayload.role
+    sessionStorage.setItem('token', authPayload.token);
+    sessionStorage.setItem('user', JSON.stringify({
+        ...authPayload,
+        id: authPayload.id || authPayload._id
     }));
 };
 
@@ -54,13 +53,38 @@ export const resetPassword = async ({ email, code, newPassword }) => {
 };
 
 export const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('user');
     localStorage.removeItem('contentGeneratorMessages'); // Clear chat history on logout
 };
 
 export const getCurrentUser = () => {
-    const userStr = localStorage.getItem('user');
+    const userStr = sessionStorage.getItem('user');
     if (userStr) return JSON.parse(userStr);
     return null;
 };
+
+// Profile management
+export const getProfile = async () => {
+    const response = await api.get("/auth/profile");
+    return response.data;
+};
+
+export const updateProfile = async (profileData) => {
+    const response = await api.put("/auth/profile", profileData);
+    if (response.data.user) {
+        sessionStorage.setItem("user", JSON.stringify(response.data.user));
+    }
+    return response.data;
+};
+
+export const changePassword = async (passwords) => {
+    const response = await api.put("/auth/change-password", passwords);
+    return response.data;
+};
+
+export const deleteAccount = async () => {
+    const response = await api.delete("/auth/delete-account");
+    return response.data;
+};
+

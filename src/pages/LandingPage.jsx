@@ -54,26 +54,10 @@ const features = [
         badgeColor: 'bg-purple-100 text-purple-700 dark:bg-purple-500/20 dark:text-purple-300 border-purple-200 dark:border-purple-500/30'
     },
     {
-        icon: Trophy,
-        title: 'Gamified Challenges',
-        description: 'Earn XP, badges, and climb leaderboards through interactive quizzes and streaks.',
-        glow: 'yellow',
-        badge: 'Popular',
-        badgeColor: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-300 border-yellow-200 dark:border-yellow-500/30'
-    },
-    {
         icon: Users,
         title: 'Live Study Rooms',
         description: 'Join virtual rooms to collaborate with peers in real-time with video and chat.',
         glow: 'blue'
-    },
-    {
-        icon: Store,
-        title: 'Teacher Marketplace',
-        description: 'Find expert tutors or sell your own high-quality study materials.',
-        glow: 'emerald',
-        badge: 'New',
-        badgeColor: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/30'
     },
     {
         icon: Clock,
@@ -98,12 +82,6 @@ const features = [
         title: 'Mentorship Network',
         description: 'Connect with experienced mentors who guide you through tough subjects one-on-one.',
         glow: 'amber'
-    },
-    {
-        icon: Zap,
-        title: 'Smart Analytics',
-        description: 'Track your study hours, weak areas, and progress with AI-powered dashboards.',
-        glow: 'teal'
     }
 ];
 
@@ -777,7 +755,7 @@ const LandingPage = () => {
                             transition={{ duration: 0.6, delay: 0.25, ease }}
                             className="text-slate-500 dark:text-gray-400 font-medium max-w-xl mx-auto"
                         >
-                            Nine powerful modules working together so you never study the hard way again.
+                            Six powerful modules working together so you never study the hard way again.
                         </motion.p>
                     </div>
                     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -788,228 +766,7 @@ const LandingPage = () => {
                 </div>
             </section>
 
-            <AnimatedDivider />
 
-            {/* ══════════════ WORKFLOW ══════════════ */}
-            <section id="workflow" className="relative px-6 py-28 bg-slate-100 dark:bg-white/[0.02] border-y border-slate-200 dark:border-white/5 overflow-hidden">
-                <motion.div
-                    className="pointer-events-none absolute -right-40 top-1/2 h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-purple-600/5 dark:bg-[#8c30e8]/10 blur-[100px]"
-                    animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0.8, 0.5] }}
-                    transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <div className="mx-auto max-w-6xl relative z-10">
-                    <div className="text-center mb-16">
-                        <SectionBadge color="border-purple-200 bg-purple-50 text-purple-600 dark:border-[#8c30e8]/30 dark:bg-[#8c30e8]/10 dark:text-[#8c30e8]" icon={Target} label="How It Works" />
-                        <SectionHeading className="mb-4">A Ritual Built For Deep Work</SectionHeading>
-                        <motion.p
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.6, delay: 0.2, ease }}
-                            className="text-slate-500 dark:text-gray-400 font-medium max-w-xl mx-auto"
-                        >
-                            Three simple steps. One powerful system. Focus on what matters.
-                        </motion.p>
-                    </div>
-
-                    <div className="grid gap-12 lg:grid-cols-2 items-center">
-                        {/* Steps */}
-                        <div className="space-y-8">
-                            {workflow.map((step, i) => (
-                                <motion.div
-                                    key={i}
-                                    initial={{ opacity: 0, x: -50 }}
-                                    whileInView={{ opacity: 1, x: 0 }}
-                                    viewport={{ once: true, margin: '-40px' }}
-                                    transition={{ duration: 0.65, ease, delay: i * 0.15 }}
-                                    className="flex gap-5 group"
-                                >
-                                    <div className="flex flex-col items-center">
-                                        <motion.div
-                                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-100 border border-purple-200 text-purple-600 dark:bg-[#8c30e8]/10 dark:border-[#8c30e8]/20 dark:text-[#8c30e8] font-mono text-sm font-bold transition-all duration-300 group-hover:bg-purple-200 dark:group-hover:bg-[#8c30e8]/25"
-                                            whileHover={{ scale: 1.15, rotate: 6 }}
-                                        >
-                                            {step.step}
-                                        </motion.div>
-                                        {i < workflow.length - 1 && (
-                                            <motion.div
-                                                className="mt-2 h-full w-px bg-purple-600/30 dark:bg-[#8c30e8]/30"
-                                                initial={{ scaleY: 0 }}
-                                                whileInView={{ scaleY: 1 }}
-                                                viewport={{ once: true }}
-                                                transition={{ duration: 0.7, delay: i * 0.15 + 0.4, ease }}
-                                                style={{ transformOrigin: 'top' }}
-                                            />
-                                        )}
-                                    </div>
-                                    <div className="pb-4">
-                                        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1 transition-colors duration-300 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8]">
-                                            {step.title}
-                                        </h3>
-                                        <p className="text-sm font-medium text-slate-500 dark:text-gray-400 leading-relaxed">{step.detail}</p>
-                                    </div>
-                                </motion.div>
-                            ))}
-                        </div>
-
-                        {/* Timer Mockup */}
-                        <motion.div
-                            initial={{ opacity: 0, x: 60, scale: 0.93 }}
-                            whileInView={{ opacity: 1, x: 0, scale: 1 }}
-                            viewport={{ once: true, margin: '-60px' }}
-                            transition={{ duration: 0.8, ease, delay: 0.2 }}
-                            whileHover={{ y: -6 }}
-                            className="rounded-[1.75rem] border border-slate-200 dark:border-white/10 bg-white dark:bg-[#191121] p-8 shadow-2xl shadow-purple-600/5 dark:shadow-[#8c30e8]/10"
-                        >
-                            <div className="mb-8 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <motion.div
-                                        className="h-3 w-3 rounded-full bg-emerald-500"
-                                        animate={{ scale: [1, 1.5, 1], opacity: [1, 0.5, 1] }}
-                                        transition={{ duration: 1.8, repeat: Infinity }}
-                                        style={{ boxShadow: '0 0 10px rgba(16,185,129,0.6)' }}
-                                    />
-                                    <span className="text-sm font-bold text-slate-900 dark:text-white">Focus Mode Active</span>
-                                </div>
-                                <span className="rounded-lg bg-slate-100 dark:bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-500 dark:text-gray-400">Session 2 / 4</span>
-                            </div>
-
-                            <div className="flex justify-center mb-8">
-                                <div className="relative w-48 h-48">
-                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                                        <circle cx="100" cy="100" r="85" strokeWidth="7" className="fill-none stroke-slate-200 dark:stroke-white/10" />
-                                        <motion.circle
-                                            cx="100"
-                                            cy="100"
-                                            r="85"
-                                            strokeWidth="7"
-                                            strokeLinecap="round"
-                                            className="fill-none stroke-purple-600 dark:stroke-[#8c30e8]"
-                                            strokeDasharray="534"
-                                            initial={{ strokeDashoffset: 534 }}
-                                            whileInView={{ strokeDashoffset: 181 }}
-                                            viewport={{ once: true }}
-                                            transition={{ duration: 1.6, ease, delay: 0.5 }}
-                                        />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-5xl font-bold font-mono text-slate-900 dark:text-white tracking-wider">25:00</span>
-                                        <span className="text-[11px] font-bold text-slate-500 dark:text-gray-400 mt-1 uppercase tracking-widest">remaining</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mb-6 rounded-xl bg-purple-50 dark:bg-[#8c30e8]/10 border border-purple-100 dark:border-[#8c30e8]/20 p-5">
-                                <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-purple-600 dark:text-[#8c30e8]">Current Task</div>
-                                <div className="text-xl font-bold text-slate-900 dark:text-white">Data Structures Review</div>
-                                <div className="mt-1 text-sm font-medium text-slate-500 dark:text-gray-400">Binary Trees and Graphs</div>
-                            </div>
-
-                            <div className="mb-6">
-                                <div className="mb-2 flex justify-between text-xs font-bold text-slate-500 dark:text-gray-400">
-                                    <span>Session Progress</span>
-                                    <motion.span
-                                        className="text-purple-600 dark:text-[#8c30e8]"
-                                        initial={{ opacity: 0 }}
-                                        whileInView={{ opacity: 1 }}
-                                        viewport={{ once: true }}
-                                        transition={{ delay: 1.1 }}
-                                    >
-                                        66%
-                                    </motion.span>
-                                </div>
-                                <AnimatedProgressBar pct={66} />
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3">
-                                {[
-                                    { val: '7d', label: 'Streak', color: 'text-yellow-600 dark:text-yellow-400' },
-                                    { val: '12', label: 'Notes', color: 'text-purple-600 dark:text-[#8c30e8]' },
-                                    { val: '94', label: 'XP', color: 'text-slate-900 dark:text-white' }
-                                ].map((item, i) => (
-                                    <motion.div
-                                        key={i}
-                                        initial={{ opacity: 0, scale: 0.75 }}
-                                        whileInView={{ opacity: 1, scale: 1 }}
-                                        viewport={{ once: true }}
-                                        transition={{ delay: 0.9 + i * 0.1, type: 'spring', stiffness: 280 }}
-                                        whileHover={{ scale: 1.08, y: -2 }}
-                                        className="rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 p-4 text-center hover:border-purple-300 dark:hover:border-[#8c30e8]/30 transition-colors duration-300"
-                                    >
-                                        <div className={`text-2xl font-bold ${item.color}`}>{item.val}</div>
-                                        <div className="text-[10px] text-slate-500 dark:text-gray-400 font-bold mt-1 uppercase tracking-wider">{item.label}</div>
-                                    </motion.div>
-                                ))}
-                            </div>
-                        </motion.div>
-                    </div>
-                </div>
-            </section>
-
-            <AnimatedDivider />
-
-            {/* ══════════════ TESTIMONIALS ══════════════ */}
-            <section className="relative py-28 overflow-hidden">
-                <div className="mx-auto max-w-7xl px-6">
-                    <div className="mb-12 text-center">
-                        <SectionBadge color="border-yellow-200 bg-yellow-50 text-yellow-600 dark:border-yellow-500/30 dark:bg-yellow-500/10 dark:text-yellow-400" icon={Star} label="Reviews" />
-                        <SectionHeading>Loved by Students and Teachers</SectionHeading>
-                    </div>
-                </div>
-                <TestimonialsMarquee isMobile={isMobile} />
-            </section>
-
-            <AnimatedDivider />
-
-            {/* ══════════════ PRICING ══════════════ */}
-            <section id="pricing" className="relative px-6 py-28 bg-slate-100 dark:bg-white/[0.02] border-y border-slate-200 dark:border-white/5 overflow-hidden">
-                <motion.div
-                    className="pointer-events-none absolute -left-40 top-1/2 h-[500px] w-[500px] -translate-y-1/2 rounded-full bg-blue-600/5 dark:bg-[#8c30e8]/10 blur-[100px]"
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 10, repeat: Infinity, ease: 'easeInOut' }}
-                />
-                <div className="mx-auto max-w-7xl relative z-10">
-                    <div className="mb-16 text-center">
-                        <SectionHeading className="mb-6">Invest In Your Grades</SectionHeading>
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.5, delay: 0.25, ease }}
-                            className="flex items-center justify-center gap-4 text-sm font-bold"
-                        >
-                            <span className={!isYearly ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-gray-400'}>Monthly</span>
-                            <button
-                                onClick={() => setIsYearly((v) => !v)}
-                                className="relative w-14 h-7 rounded-full bg-slate-200 dark:bg-white/10 border border-slate-300 dark:border-white/20 flex items-center p-1 focus:outline-none focus:ring-2 focus:ring-purple-500/40"
-                            >
-                                <motion.div
-                                    className="w-5 h-5 rounded-full bg-purple-600 dark:bg-[#8c30e8] shadow-md"
-                                    animate={{ x: isYearly ? 26 : 0 }}
-                                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                                />
-                            </button>
-                            <span className={`flex items-center gap-2 ${isYearly ? 'text-slate-900 dark:text-white' : 'text-slate-500 dark:text-gray-400'}`}>
-                                Annually
-                                <motion.span
-                                    animate={isYearly ? { scale: [1, 1.12, 1] } : {}}
-                                    transition={{ duration: 0.3 }}
-                                    className="rounded-full bg-emerald-100 dark:bg-emerald-500/20 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider"
-                                >
-                                    Save 20%
-                                </motion.span>
-                            </span>
-                        </motion.div>
-                    </div>
-                    <div className="grid gap-6 lg:grid-cols-3 items-stretch">
-                        {pricingPlans.map((plan, i) => (
-                            <PricingCard key={plan.title} plan={plan} isYearly={isYearly} index={i} />
-                        ))}
-                    </div>
-                </div>
-            </section>
-
-            <AnimatedDivider />
 
             {/* ══════════════ FINAL CTA ══════════════ */}
             <section className="relative px-6 py-36 text-center overflow-hidden">

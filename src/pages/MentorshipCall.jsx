@@ -46,7 +46,7 @@ const MentorshipCall = () => {
     const navigate = useNavigate();
     const user = useMemo(() => {
         try {
-            return JSON.parse(localStorage.getItem('user'));
+            return JSON.parse(sessionStorage.getItem('user'));
         } catch (error) {
             return null;
         }

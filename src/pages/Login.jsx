@@ -30,7 +30,6 @@ const Login = () => {
         email: '',
         password: ''
     });
-    const [isTeacher, setIsTeacher] = useState(false);
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -85,8 +84,7 @@ const Login = () => {
             setIsLoading(true);
             try {
                 const response = await loginWithGoogle({ 
-                    idToken: tokenResponse.access_token,
-                    role: isTeacher ? 'teacher' : 'student'
+                    idToken: tokenResponse.access_token
                 });
                 if (response.role === 'teacher') {
                     navigate('/instructor-dashboard');
@@ -101,9 +99,7 @@ const Login = () => {
         onError: () => setApiError('Google Login Failed'),
     });
 
-    const toggleRole = () => {
-        setIsTeacher(!isTeacher);
-    };
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();

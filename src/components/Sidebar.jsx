@@ -16,21 +16,21 @@ import {
     Sparkles // Added for the logo UI
 } from 'lucide-react';
 
-const Sidebar = () => {
+const Sidebar = ({ activeTab, onTabChange }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const navigate = useNavigate();
     const location = useLocation();
 
     const sidebarItems = [
-        { id: '/student-dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-        { id: '/content-generator', icon: FileText, label: 'Content Generator' },
-        { id: '/mentorship', icon: Users, label: 'Mentorship System' },
-        { id: '/studyroom', icon: Video, label: 'Study Room' },
-        { id: '/focusrooms', icon: Headphones, label: 'Focus Rooms' },
-        { id: '/studybuddy', icon: UserPlus, label: 'Study with Buddy' },
-        { id: '/community', icon: MessageSquare, label: 'Community' },
-        { id: '/resources', icon: BookOpen, label: 'Resource Hub' },
-        { id: '/settings', icon: Settings, label: 'Settings' },
+        { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+        { id: 'content-generator', icon: FileText, label: 'Content Generator', route: '/content-generator' },
+        { id: 'mentorship', icon: Users, label: 'Mentorship System', route: '/mentorship' },
+        { id: 'studyroom', icon: Video, label: 'Study Room', route: '/studyroom' },
+        { id: 'focusrooms', icon: Headphones, label: 'Focus Rooms', route: '/focusrooms' },
+        { id: 'studybuddy', icon: UserPlus, label: 'Study with Buddy', route: '/studybuddy' },
+        { id: 'community', icon: MessageSquare, label: 'Community' },
+        { id: 'resources', icon: BookOpen, label: 'Resource Hub' },
+        { id: 'settings', icon: Settings, label: 'Settings' },
     ];
 
     const handleLogout = () => {
@@ -42,7 +42,16 @@ const Sidebar = () => {
         setIsExpanded(!isExpanded);
     };
 
-    // Styling logic ko match karne ke liye isExpanded ko isCollapsed mein map kiya hai
+    const handleNavigation = (item) => {
+        if (item.route) {
+            navigate(item.route);
+        } else if (onTabChange) {
+            onTabChange(item.id);
+        } else {
+            navigate('/student-dashboard');
+        }
+    };
+
     const isCollapsed = !isExpanded;
 
     return (
@@ -91,12 +100,12 @@ const Sidebar = () => {
             {/* ── Navigation ── */}
             <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1 custom-scrollbar" aria-label="Main Navigation">
                 {sidebarItems.map((item) => {
-                    const isActive = location.pathname === item.id;
+                    const isActive = activeTab === item.id || (item.route && location.pathname === item.route);
 
                     return (
                         <button
                             key={item.id}
-                            onClick={() => navigate(item.id)}
+                            onClick={() => handleNavigation(item)}
                             aria-current={isActive ? 'page' : undefined}
                             className={`
                                 w-full group relative flex items-center gap-3 rounded-xl

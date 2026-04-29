@@ -27,7 +27,7 @@ const SOCKET_SERVER_URL = process.env.REACT_APP_SOCKET_URL || (isLocalhost
 const ActiveStudyRoom = () => {
     const { roomId } = useParams();
     const navigate = useNavigate();
-    const user = useMemo(() => JSON.parse(localStorage.getItem('user')), []);
+    const user = useMemo(() => JSON.parse(sessionStorage.getItem('user')), []);
 
     // UI State
     const [roomDetails, setRoomDetails] = useState(null);

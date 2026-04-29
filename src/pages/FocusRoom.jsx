@@ -18,8 +18,8 @@ const FocusRoom = () => {
     const [sessions, setSessions] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Get current user from localStorage
-    const user = JSON.parse(localStorage.getItem('user'));
+    // Get current user from sessionStorage
+    const user = JSON.parse(sessionStorage.getItem('user'));
 
     // Formatting time
     const minutes = Math.floor(timeLeft / 60);
