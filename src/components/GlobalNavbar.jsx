@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Moon, Sun, Bell, Sparkles, Camera, X, UserCircle2 } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { getCurrentUser, updateProfile } from '../services/authService';
-import { getNotifications, markAsRead, clearAllNotifications } from '../services/notificationService';
+import { getNotifications, markAsRead, clearAllNotifications, markAllAsRead } from '../services/notificationService';
 
 const ease = [0.25, 0.46, 0.45, 0.94];
 
@@ -40,13 +40,22 @@ const GlobalNavbar = memo(function GlobalNavbar({ isDark, setIsDark }) {
                 bio: currentUser.bio || ''
             });
             fetchNotifications();
+
+            // Poll for new notifications every 30 seconds
+            const interval = setInterval(fetchNotifications, 30000);
+            return () => clearInterval(interval);
+        } else {
+            setUser(null);
+            setNotifications([]);
         }
     }, [location.pathname]);
 
     const fetchNotifications = async () => {
         try {
             const data = await getNotifications();
-            setNotifications(data || []);
+            // Data is { notifications: [...] }
+            const list = Array.isArray(data) ? data : (data?.notifications || []);
+            setNotifications(list);
         } catch (error) {
             console.error("[Navbar] Failed to fetch notifications:", error);
             setNotifications([]);
@@ -67,6 +76,11 @@ const GlobalNavbar = memo(function GlobalNavbar({ isDark, setIsDark }) {
     const handleClearAll = async () => {
         await clearAllNotifications();
         setNotifications([]);
+    };
+
+    const handleMarkAllRead = async () => {
+        await markAllAsRead();
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     };
 
     const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -180,12 +194,20 @@ const GlobalNavbar = memo(function GlobalNavbar({ isDark, setIsDark }) {
                                             )}
                                         </div>
                                         {notifications.length > 0 && (
-                                            <button
-                                                onClick={handleClearAll}
-                                                className="mt-4 w-full py-2 text-[11px] text-slate-500 dark:text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 font-bold border-t border-slate-100 dark:border-white/5 transition-colors"
-                                            >
-                                                Clear all notifications
-                                            </button>
+                                            <div className="mt-4 flex items-center gap-2 border-t border-slate-100 dark:border-white/5 pt-3">
+                                                <button
+                                                    onClick={handleMarkAllRead}
+                                                    className="flex-1 py-2 text-[10px] font-bold text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-lg transition-colors"
+                                                >
+                                                    Mark all as read
+                                                </button>
+                                                <button
+                                                    onClick={handleClearAll}
+                                                    className="flex-1 py-2 text-[10px] font-bold text-slate-500 dark:text-gray-400 hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition-colors"
+                                                >
+                                                    Clear all
+                                                </button>
+                                            </div>
                                         )}
                                     </motion.div>
                                 )}

@@ -53,6 +53,8 @@ const InstructorDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [sessionRequests, setSessionRequests] = useState([]);
+    const [showAllSessions, setShowAllSessions] = useState(false);
+    const [showAllRequests, setShowAllRequests] = useState(false);
     const [profileForm, setProfileForm] = useState({
         name: '',
         email: '',
@@ -150,7 +152,7 @@ const InstructorDashboard = () => {
     };
 
     // Filter and Sort Sessions: Only 3 closest upcoming ones
-    const processedSessions = useMemo(() => {
+    const allProcessedSessions = useMemo(() => {
         const now = new Date();
         return upcomingSessions
             .map(s => ({
@@ -158,9 +160,11 @@ const InstructorDashboard = () => {
                 startTime: getSessionStartDateTime(s.dateLabel, s.timeSlot)
             }))
             .filter(s => s.startTime && s.startTime > new Date(now.getTime() - 60 * 60 * 1000))
-            .sort((a, b) => a.startTime - b.startTime)
-            .slice(0, 3);
+            .sort((a, b) => a.startTime - b.startTime);
     }, [upcomingSessions]);
+
+    const displaySessions = showAllSessions ? allProcessedSessions : allProcessedSessions.slice(0, 3);
+    const displayRequests = showAllRequests ? sessionRequests : sessionRequests.slice(0, 3);
 
     const handleAcceptRequest = async (requestId) => {
         try {
@@ -345,8 +349,8 @@ const InstructorDashboard = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                                            {processedSessions.length > 0 ? (
-                                                processedSessions.map((session, idx) => {
+                                            {displaySessions.length > 0 ? (
+                                                displaySessions.map((session, idx) => {
                                                     const joinable = isSessionJoinableNow(session);
                                                     return (
                                                         <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
@@ -382,6 +386,14 @@ const InstructorDashboard = () => {
                                                 </div>
                                             )}
                                         </div>
+                                        {allProcessedSessions.length > 3 && (
+                                            <button
+                                                onClick={() => setShowAllSessions(!showAllSessions)}
+                                                className="mt-4 text-xs font-bold text-purple-600 dark:text-[#8c30e8] hover:underline flex items-center justify-center gap-1 mx-auto"
+                                            >
+                                                {showAllSessions ? 'Show Less' : `See More (${allProcessedSessions.length - 3} more)`}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Session Requests */}
@@ -393,8 +405,8 @@ const InstructorDashboard = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-4 flex-1 overflow-y-auto custom-scrollbar pr-1">
-                                            {sessionRequests.length > 0 ? (
-                                                sessionRequests.map((request, idx) => (
+                                            {displayRequests.length > 0 ? (
+                                                displayRequests.map((request, idx) => (
                                                     <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
                                                         <div className="font-bold text-slate-900 dark:text-white text-sm mb-1">{request.studentName}</div>
                                                         <div className="text-xs font-medium text-slate-500 dark:text-gray-400 mb-1.5">{request.subject}</div>
@@ -425,6 +437,14 @@ const InstructorDashboard = () => {
                                                 </div>
                                             )}
                                         </div>
+                                        {sessionRequests.length > 3 && (
+                                            <button
+                                                onClick={() => setShowAllRequests(!showAllRequests)}
+                                                className="mt-4 text-xs font-bold text-purple-600 dark:text-[#8c30e8] hover:underline flex items-center justify-center gap-1 mx-auto"
+                                            >
+                                                {showAllRequests ? 'Show Less' : `See More (${sessionRequests.length - 3} more)`}
+                                            </button>
+                                        )}
                                     </div>
 
                                     {/* Student Analytics */}

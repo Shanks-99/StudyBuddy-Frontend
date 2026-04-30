@@ -455,9 +455,7 @@ const Mentorship = () => {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <button className="p-2.5 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-600 dark:text-gray-300 border border-slate-200 dark:border-white/5 transition-colors">
-                            <Bell className="w-5 h-5" />
-                        </button>
+                        {/* GlobalNavbar handles notifications and theme */}
                     </div>
                 </header>
 
