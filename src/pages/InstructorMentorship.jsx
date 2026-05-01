@@ -293,7 +293,7 @@ const InstructorMentorship = () => {
 
                                 {/* Recent Sessions */}
                                 <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
-                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Recent Sessions (Top 3)</h3>
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Recent Sessions</h3>
                                     <div className="space-y-4">
                                         {recentSessions.map((session) => (
                                             <div key={`recent-${session.id}`} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-5 hover:border-slate-200 dark:hover:border-white/10 transition-all">
@@ -362,7 +362,7 @@ const InstructorMentorship = () => {
                                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-100 dark:border-white/10">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                                         <CalendarDays className="w-5 h-5 text-purple-600 dark:text-[#8c30e8]" /> 
-                                        Set Availability (1-hour slots)
+                                        Set Availability
                                     </h3>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <button
@@ -456,7 +456,7 @@ const InstructorMentorship = () => {
                                                 {dayEnabled && (
                                                     <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/5">
                                                         <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-3">
-                                                            Select 1-hour slots ({activeSlots.length} selected)
+                                                            Select slots ({activeSlots.length} selected)
                                                         </div>
                                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
                                                             {HOURLY_SLOT_OPTIONS.map((slot) => {

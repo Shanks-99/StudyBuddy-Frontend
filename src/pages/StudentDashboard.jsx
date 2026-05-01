@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCurrentUser } from '../services/authService';
 import { getFocusSessions } from '../services/focusService';
@@ -37,11 +37,17 @@ const fadeIn = {
 };
 
 const StudentDashboard = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [focusSessions, setFocusSessions] = useState([]);
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const [activeTab, setActiveTab] = useState(() => {
+        const params = new URLSearchParams(location.search);
+        return params.get('tab') || 'dashboard';
+    });
     const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
 
     // Sync isDark with document class
@@ -52,6 +58,15 @@ const StudentDashboard = () => {
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
         return () => observer.disconnect();
     }, []);
+
+    // Sync activeTab with URL
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab);
+        }
+    }, [activeTab]);
 
     const toggleTheme = (val) => {
         const html = document.documentElement;
@@ -72,8 +87,6 @@ const StudentDashboard = () => {
     ]);
     const [newTodo, setNewTodo] = useState('');
     const [showAddTodo, setShowAddTodo] = useState(false);
-
-    const navigate = useNavigate();
 
     useEffect(() => {
         const currentUser = getCurrentUser();
@@ -121,8 +134,7 @@ const StudentDashboard = () => {
                 startTime: getSessionStartDateTime(s.dateLabel, s.timeSlot)
             }))
             .filter(s => s.startTime && s.startTime > new Date(now.getTime() - 60 * 60 * 1000)) // Keep upcoming or joinable
-            .sort((a, b) => a.startTime - b.startTime)
-            .slice(0, 3);
+            .sort((a, b) => a.startTime - b.startTime);
     }, [upcomingSessions]);
 
     const handleToggleTodo = (id) => {
@@ -150,7 +162,7 @@ const StudentDashboard = () => {
     const handleJoinSession = (session) => {
         const roomId = getMentorshipCallRoomId(session);
         if (roomId) {
-            navigate(`/mentorship/call/${roomId}`);
+            navigate(`/mentorship-call/${roomId}`);
         }
     };
 
@@ -278,14 +290,14 @@ const StudentDashboard = () => {
                                     {/* Upcoming Sessions */}
                                     <motion.div {...fadeIn} transition={{ delay: 0.1 }} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-[2rem] p-6 flex flex-col">
                                         <div className="flex items-center justify-between mb-6">
-                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Next Sessions</h3>
+                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Upcoming Sessions</h3>
                                             <div className="p-2 bg-blue-50 dark:bg-blue-500/10 rounded-lg">
                                                 <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                                             </div>
                                         </div>
                                         <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
                                             {processedSessions.length > 0 ? (
-                                                processedSessions.map((session, idx) => {
+                                                processedSessions.slice(0, 2).map((session, idx) => {
                                                     const joinable = isSessionJoinableNow(session);
                                                     return (
                                                         <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all group">
@@ -326,6 +338,14 @@ const StudentDashboard = () => {
                                                         Find a Mentor
                                                     </button>
                                                 </div>
+                                            )}
+                                            {processedSessions.length > 2 && (
+                                                <button
+                                                    onClick={() => navigate('/mentorship')}
+                                                    className="mt-4 text-xs font-bold text-purple-600 dark:text-[#8c30e8] hover:underline flex items-center justify-center gap-1 mx-auto"
+                                                >
+                                                    See All Sessions ({processedSessions.length})
+                                                </button>
                                             )}
                                         </div>
                                     </motion.div>

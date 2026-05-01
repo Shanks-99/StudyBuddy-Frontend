@@ -18,12 +18,15 @@ export const isInstructorMentorProfileComplete = (profile) => {
         profile.email,
         profile.specializedCourses,
         profile.description,
+        profile.qualification,
+        profile.skillLevel,
     ];
 
     const allFilled = required.every((value) => typeof value === 'string' && value.trim().length > 0);
+    const hasTags = Array.isArray(profile.tags) && profile.tags.length > 0;
     const hasDegreeFiles = Array.isArray(profile.degreeFiles) && profile.degreeFiles.length > 0;
 
-    return allFilled && hasDegreeFiles;
+    return allFilled && hasTags && hasDegreeFiles;
 };
 
 export const saveInstructorMentorProfile = async (profileInput) => {

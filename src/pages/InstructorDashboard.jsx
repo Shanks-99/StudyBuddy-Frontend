@@ -46,15 +46,19 @@ import {
 import SettingsView from '../components/SettingsView';
 
 const InstructorDashboard = () => {
+    const navigate = useNavigate();
+    const location = useLocation();
+    
     const [user, setUser] = useState(null);
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const [activeTab, setActiveTab] = useState(() => {
+        const params = new URLSearchParams(location.search);
+        return params.get('tab') || 'dashboard';
+    });
     const [showProfileModal, setShowProfileModal] = useState(false);
     const [profileStatus, setProfileStatus] = useState('missing');
     const [loading, setLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [sessionRequests, setSessionRequests] = useState([]);
-    const [showAllSessions, setShowAllSessions] = useState(false);
-    const [showAllRequests, setShowAllRequests] = useState(false);
     const [profileForm, setProfileForm] = useState({
         name: '',
         email: '',
@@ -62,8 +66,6 @@ const InstructorDashboard = () => {
         description: '',
         degreeFiles: [],
     });
-    const navigate = useNavigate();
-    const location = useLocation();
 
     // Theme handling for SettingsView
     const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
@@ -74,6 +76,15 @@ const InstructorDashboard = () => {
         observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
         return () => observer.disconnect();
     }, []);
+
+    // Sync activeTab with URL
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const tab = params.get('tab');
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab);
+        }
+    }, [location.search, activeTab]);
 
     const toggleTheme = (val) => {
         const html = document.documentElement;
@@ -112,20 +123,11 @@ const InstructorDashboard = () => {
                 const existingProfile = await getInstructorMentorProfile();
 
                 if (existingProfile) {
-                    setProfileForm({
-                        name: existingProfile.name || currentUser.name || '',
-                        email: existingProfile.email || '',
-                        specializedCourses: existingProfile.specializedCourses || '',
-                        description: existingProfile.description || '',
-                        degreeFiles: Array.isArray(existingProfile.degreeFiles) ? existingProfile.degreeFiles : [],
-                    });
                     setProfileStatus(existingProfile.status || 'pending');
                 } else {
-                    setProfileForm((prev) => ({
-                        ...prev,
-                        name: currentUser.name || '',
-                    }));
                     setProfileStatus('missing');
+                    // Redirect to profile setup if missing
+                    navigate('/instructor-profile?setup=1');
                 }
             } catch (error) {
                 console.error('Failed to load mentor profile:', error);
@@ -163,8 +165,8 @@ const InstructorDashboard = () => {
             .sort((a, b) => a.startTime - b.startTime);
     }, [upcomingSessions]);
 
-    const displaySessions = showAllSessions ? allProcessedSessions : allProcessedSessions.slice(0, 3);
-    const displayRequests = showAllRequests ? sessionRequests : sessionRequests.slice(0, 3);
+    const displaySessions = allProcessedSessions.slice(0, 3);
+    const displayRequests = sessionRequests.slice(0, 2);
 
     const handleAcceptRequest = async (requestId) => {
         try {
@@ -187,93 +189,23 @@ const InstructorDashboard = () => {
     const handleJoinSession = (session) => {
         const roomId = getMentorshipCallRoomId(session);
         if (roomId) {
-            navigate(`/mentorship/call/${roomId}`);
+            navigate(`/mentorship-call/${roomId}`);
         }
     };
 
-    useEffect(() => {
-        const searchParams = new URLSearchParams(location.search);
-        if (searchParams.get('completeProfile') === '1') {
-            setShowProfileModal(true);
-        }
-    }, [location.search]);
 
-    useEffect(() => {
-        if (!showProfileModal) return undefined;
-
-        const previousBodyOverflow = document.body.style.overflow;
-        const previousHtmlOverflow = document.documentElement.style.overflow;
-
-        document.body.style.overflow = 'hidden';
-        document.documentElement.style.overflow = 'hidden';
-
-        return () => {
-            document.body.style.overflow = previousBodyOverflow;
-            document.documentElement.style.overflow = previousHtmlOverflow;
-        };
-    }, [showProfileModal]);
-
-    const handleProfileInputChange = (event) => {
-        const { name, value } = event.target;
-        setProfileForm((prev) => ({ ...prev, [name]: value }));
-    };
-
-    const handleDegreeFilesChange = (event) => {
-        const files = Array.from(event.target.files || []);
-        const validFiles = files.filter((file) => ['image/png', 'image/jpeg'].includes(file.type));
-
-        if (validFiles.length !== files.length) {
-            alert('Only PNG or JPG files are allowed for degree attachments.');
-        }
-
-        setProfileForm((prev) => ({
-            ...prev,
-            degreeFiles: validFiles.map((file) => file.name),
-        }));
-    };
-
-    const handleProfileSubmit = async (event) => {
-        event.preventDefault();
-
-        const payload = {
-            ...profileForm,
-            name: profileForm.name.trim(),
-            email: profileForm.email.trim(),
-            specializedCourses: profileForm.specializedCourses.trim(),
-            description: profileForm.description.trim(),
-        };
-
-        if (!isInstructorMentorProfileComplete(payload)) {
-            alert('Please complete all fields and attach at least one PNG/JPG degree image.');
-            return;
-        }
-
-        try {
-            const saved = await saveInstructorMentorProfile(payload);
-            setProfileStatus(saved?.status || 'pending');
-            setShowProfileModal(false);
-            alert('Profile saved successfully.');
-        } catch (error) {
-            alert('Failed to save profile.');
-        }
-    };
 
     if (!user) return null;
 
     // Mock data - Updated with solid background colors mapping to the previous gradient themes
     const overviewStats = [
-        { label: 'Upcoming Sessions', value: upcomingSessions.length.toString(), icon: Calendar, color: 'bg-pink-50 text-pink-600 dark:bg-pink-500/20 dark:text-pink-400' },
+        { label: 'Upcoming Sessions', value: allProcessedSessions.length.toString(), icon: Calendar, color: 'bg-pink-50 text-pink-600 dark:bg-pink-500/20 dark:text-pink-400' },
         { label: 'Pending Requests', value: sessionRequests.length.toString(), icon: Clock, color: 'bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' },
         { label: 'Total Students Helped', value: '156', icon: UserCheck, color: 'bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' },
         { label: 'Resources Uploaded', value: '42', icon: Upload, color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' },
         { label: 'Community Answers', value: '89', icon: MessageSquare, color: 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8]/20 dark:text-[#8c30e8]' },
     ];
 
-    const studentProgress = [
-        { name: 'Mansoor Shah', progress: 85, quizScore: 92, attendance: 95 },
-        { name: 'Ayesha Shah', progress: 72, quizScore: 78, attendance: 88 },
-        { name: 'Bisma Khan', progress: 90, quizScore: 95, attendance: 100 },
-    ];
 
     const uploadedResources = [
         { name: 'Database Notes- Chapter 5', type: 'PDF', downloads: 45, date: '2 days ago' },
@@ -388,10 +320,10 @@ const InstructorDashboard = () => {
                                         </div>
                                         {allProcessedSessions.length > 3 && (
                                             <button
-                                                onClick={() => setShowAllSessions(!showAllSessions)}
+                                                onClick={() => navigate('/instructor-mentorship')}
                                                 className="mt-4 text-xs font-bold text-purple-600 dark:text-[#8c30e8] hover:underline flex items-center justify-center gap-1 mx-auto"
                                             >
-                                                {showAllSessions ? 'Show Less' : `See More (${allProcessedSessions.length - 3} more)`}
+                                                See All Sessions ({allProcessedSessions.length})
                                             </button>
                                         )}
                                     </div>
@@ -437,45 +369,37 @@ const InstructorDashboard = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        {sessionRequests.length > 3 && (
+                                        {sessionRequests.length > 2 && (
                                             <button
-                                                onClick={() => setShowAllRequests(!showAllRequests)}
+                                                onClick={() => navigate('/instructor-mentorship')}
                                                 className="mt-4 text-xs font-bold text-purple-600 dark:text-[#8c30e8] hover:underline flex items-center justify-center gap-1 mx-auto"
                                             >
-                                                {showAllRequests ? 'Show Less' : `See More (${sessionRequests.length - 3} more)`}
+                                                See All Requests ({sessionRequests.length})
                                             </button>
                                         )}
                                     </div>
 
-                                    {/* Student Analytics */}
+                                    {/* Weekly Summary */}
                                     <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex flex-col">
                                         <div className="flex items-center justify-between mb-6">
-                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Student Progress</h3>
-                                            <div className="p-2 bg-emerald-50 dark:bg-emerald-500/10 rounded-lg">
-                                                <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Weekly Summary</h3>
+                                            <div className="p-2 bg-cyan-50 dark:bg-cyan-500/10 rounded-lg">
+                                                <BarChart3 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
                                             </div>
                                         </div>
                                         <div className="space-y-4 flex-1">
-                                            {studentProgress.map((student, idx) => (
-                                                <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all">
-                                                    <div className="font-bold text-slate-900 dark:text-white text-sm mb-3">{student.name}</div>
-                                                    <div className="space-y-3">
-                                                        <div>
-                                                            <div className="flex justify-between text-xs font-medium mb-1.5">
-                                                                <span className="text-slate-500 dark:text-gray-400">Progress</span>
-                                                                <span className="text-purple-600 dark:text-[#8c30e8] font-bold">{student.progress}%</span>
-                                                            </div>
-                                                            <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-1.5">
-                                                                <div className="bg-purple-600 dark:bg-[#8c30e8] h-full rounded-full" style={{ width: `${student.progress}%` }}></div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex justify-between text-xs font-medium pt-2 border-t border-slate-200 dark:border-white/5">
-                                                            <span className="text-slate-500 dark:text-gray-400">Quiz: <span className="text-emerald-600 dark:text-emerald-400 font-bold">{student.quizScore}%</span></span>
-                                                            <span className="text-slate-500 dark:text-gray-400">Attendance: <span className="text-blue-600 dark:text-blue-400 font-bold">{student.attendance}%</span></span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                            <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 transition-colors">
+                                                <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">12</div>
+                                                <div className="text-xs font-bold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/70 mt-1">Sessions This Week</div>
+                                            </div>
+                                            <div className="bg-purple-50 dark:bg-[#8c30e8]/10 rounded-xl p-4 border border-purple-200 dark:border-[#8c30e8]/20 hover:bg-purple-100 transition-colors">
+                                                <div className="text-2xl font-extrabold text-purple-700 dark:text-[#8c30e8]">18.5 hrs</div>
+                                                <div className="text-xs font-bold uppercase tracking-wider text-purple-600/70 dark:text-purple-400/70 mt-1">Total Hours Taught</div>
+                                            </div>
+                                            <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 transition-colors">
+                                                <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">4.8/5.0</div>
+                                                <div className="text-xs font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/70 mt-1">Student Feedback Score</div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -520,29 +444,7 @@ const InstructorDashboard = () => {
 
                                     {/* Weekly Summary & Community Layout container */}
                                     <div className="flex flex-col gap-6 lg:col-span-1">
-                                        {/* Weekly Summary */}
-                                        <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6">
-                                            <div className="flex items-center justify-between mb-6">
-                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white">Weekly Summary</h3>
-                                                <div className="p-2 bg-cyan-50 dark:bg-cyan-500/10 rounded-lg">
-                                                    <BarChart3 className="w-5 h-5 text-cyan-600 dark:text-cyan-400" />
-                                                </div>
-                                            </div>
-                                            <div className="space-y-4">
-                                                <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 border border-blue-200 dark:border-blue-500/20">
-                                                    <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">12</div>
-                                                    <div className="text-xs font-bold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/70 mt-1">Sessions This Week</div>
-                                                </div>
-                                                <div className="bg-purple-50 dark:bg-[#8c30e8]/10 rounded-xl p-4 border border-purple-200 dark:border-[#8c30e8]/20">
-                                                    <div className="text-2xl font-extrabold text-purple-700 dark:text-[#8c30e8]">18.5 hrs</div>
-                                                    <div className="text-xs font-bold uppercase tracking-wider text-purple-600/70 dark:text-purple-400/70 mt-1">Total Hours Taught</div>
-                                                </div>
-                                                <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-500/20">
-                                                    <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">4.8/5.0</div>
-                                                    <div className="text-xs font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/70 mt-1">Student Feedback Score</div>
-                                                </div>
-                                            </div>
-                                        </div>
+
 
                                         {/* Community Interaction */}
                                         <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex-1">
@@ -579,114 +481,6 @@ const InstructorDashboard = () => {
                     </>
                 )}
             </div>
-
-            {/* ── Profile Modal ── */}
-            {showProfileModal && (
-                <div
-                    className="fixed inset-0 z-50 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center overscroll-contain"
-                    onWheel={(e) => e.stopPropagation()}
-                    onTouchMove={(e) => e.stopPropagation()}
-                >
-                    <div className="w-full max-w-2xl bg-white dark:bg-[#191121] border border-slate-200 dark:border-white/10 rounded-3xl overflow-hidden shadow-2xl max-h-[90vh] flex flex-col animate-in fade-in zoom-in duration-200">
-
-                        <div className="px-8 py-5 border-b border-slate-200 dark:border-white/10 flex items-center justify-between bg-slate-50 dark:bg-black/20">
-                            <h3 className="text-xl font-serif font-bold text-slate-900 dark:text-white">Mentor Profile Setup</h3>
-                            <button
-                                onClick={() => setShowProfileModal(false)}
-                                className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-gray-400 transition-colors"
-                            >
-                                <X className="w-5 h-5" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleProfileSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar bg-white dark:bg-transparent">
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-2">Name</label>
-                                <input
-                                    name="name"
-                                    value={profileForm.name}
-                                    onChange={handleProfileInputChange}
-                                    className="w-full rounded-xl bg-slate-50 dark:bg-[#1a1524] border border-slate-200 dark:border-white/10 px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 dark:focus:ring-[#8c30e8]/20 dark:focus:border-[#8c30e8] transition-all text-sm"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-2">Email</label>
-                                <input
-                                    type="email"
-                                    name="email"
-                                    value={profileForm.email}
-                                    onChange={handleProfileInputChange}
-                                    className="w-full rounded-xl bg-slate-50 dark:bg-[#1a1524] border border-slate-200 dark:border-white/10 px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 dark:focus:ring-[#8c30e8]/20 dark:focus:border-[#8c30e8] transition-all text-sm"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-2">Specialized Courses</label>
-                                <input
-                                    name="specializedCourses"
-                                    value={profileForm.specializedCourses}
-                                    onChange={handleProfileInputChange}
-                                    placeholder="Example: Calculus, Data Structures, Operating Systems"
-                                    className="w-full rounded-xl bg-slate-50 dark:bg-[#1a1524] border border-slate-200 dark:border-white/10 px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 dark:focus:ring-[#8c30e8]/20 dark:focus:border-[#8c30e8] transition-all text-sm"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-2">Description</label>
-                                <textarea
-                                    name="description"
-                                    value={profileForm.description}
-                                    onChange={handleProfileInputChange}
-                                    rows="4"
-                                    className="w-full rounded-xl bg-slate-50 dark:bg-[#1a1524] border border-slate-200 dark:border-white/10 px-4 py-3 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 dark:focus:ring-[#8c30e8]/20 dark:focus:border-[#8c30e8] transition-all text-sm resize-none"
-                                    required
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-2">Attach Degree Files (PNG/JPG)</label>
-                                <input
-                                    type="file"
-                                    multiple
-                                    accept="image/png,image/jpeg"
-                                    onChange={handleDegreeFilesChange}
-                                    className="w-full rounded-xl bg-slate-50 dark:bg-[#1a1524] border border-slate-200 dark:border-white/10 px-4 py-2.5 text-slate-600 dark:text-gray-300 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-purple-50 file:text-purple-600 dark:file:bg-[#8c30e8]/20 dark:file:text-white hover:file:bg-purple-100 dark:hover:file:bg-[#8c30e8]/30 transition-all cursor-pointer"
-                                    required={profileForm.degreeFiles.length === 0}
-                                />
-                                {profileForm.degreeFiles.length > 0 && (
-                                    <div className="mt-3 text-xs font-medium text-slate-500 dark:text-gray-400 bg-slate-100 dark:bg-white/5 p-3 rounded-lg border border-slate-200 dark:border-white/10">
-                                        <span className="font-bold text-slate-700 dark:text-gray-300">Attached:</span> {profileForm.degreeFiles.join(', ')}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4 text-amber-700 dark:text-amber-400 text-sm font-medium">
-                                Approval checks are disabled for testing right now. You can continue using mentorship features.
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-white/10">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowProfileModal(false)}
-                                    className="px-6 py-2.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-gray-300 font-bold hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-sm"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white font-bold shadow-md transition-colors text-sm"
-                                >
-                                    Submit for Approval
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

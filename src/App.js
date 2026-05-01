@@ -16,6 +16,7 @@ import ActiveStudyRoom from './pages/ActiveStudyRoom';
 import Mentorship from './pages/Mentorship';
 import InstructorMentorship from './pages/InstructorMentorship';
 import MentorshipCall from './pages/MentorshipCall';
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
   const [isDark, setIsDark] = useState(() => {
@@ -53,6 +54,7 @@ function App() {
         <Route path="/mentorship-call/:callId" element={<MentorshipCall />} />
         <Route path="/studyroom" element={<StudyRoomList />} />
         <Route path="/studyroom/:roomId" element={<ActiveStudyRoom />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

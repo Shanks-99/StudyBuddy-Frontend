@@ -14,6 +14,7 @@ import {
     Video,
     MessageSquare,
     Sparkles,
+    Users,
 } from 'lucide-react';
 import {
     DEFAULT_WEEKLY_AVAILABILITY,
@@ -174,13 +175,15 @@ const Mentorship = () => {
                     mentorId: profile.mentor || null,
                     name: profile.name,
                     initials: getInitials(profile.name),
-                    title: `${category} Mentor`,
+                    title: profile.qualification || `${category} Mentor`,
                     bio: profile.description || 'No mentor description provided yet.',
                     category,
-                    tags: tags.length > 0 ? tags : ['Mentorship'],
+                    tags: Array.isArray(profile.tags) && profile.tags.length > 0 ? profile.tags : tags,
+                    profilePicture: profile.profilePicture || '',
+                    skillLevel: profile.skillLevel || 'Beginner',
                     rating: typeof profile.rating === 'number' ? profile.rating : null,
                     sessions: typeof profile.sessionsCount === 'number' ? profile.sessionsCount : null,
-                    rate: typeof profile.rate === 'number' ? profile.rate : null,
+                    rate: typeof profile.hourlyRate === 'number' ? profile.hourlyRate : null,
                     active: hasAvailability,
                     status: profile.status || 'pending',
                     availability,
@@ -401,10 +404,25 @@ const Mentorship = () => {
         () => getWeekdayKeyFromDate(selectedDate, viewYear, viewMonthIndex),
         [selectedDate, viewYear, viewMonthIndex]
     );
-    const availableHourlySlots = useMemo(
-        () => sortSlotsByHour(HOURLY_SLOT_OPTIONS.filter((slot) => availableSlots.includes(slot))),
-        [availableSlots]
-    );
+    const availableHourlySlots = useMemo(() => {
+        const slots = HOURLY_SLOT_OPTIONS.filter((slot) => availableSlots.includes(slot));
+        const now = new Date();
+        const isToday =
+            selectedDate === now.getDate() &&
+            viewMonthIndex === now.getMonth() &&
+            viewYear === now.getFullYear();
+
+        if (!isToday) return sortSlotsByHour(slots);
+
+        // Filter out past slots for today
+        return sortSlotsByHour(
+            slots.filter((slot) => {
+                const dateLabel = `${monthNames[viewMonthIndex]} ${selectedDate}, ${viewYear}`;
+                const startTime = getSessionStartDateTime(dateLabel, slot);
+                return startTime && startTime > now;
+            })
+        );
+    }, [availableSlots, selectedDate, viewMonthIndex, viewYear]);
 
     const goToPrevMonth = () => {
         setSelectedDate(null);
@@ -522,31 +540,37 @@ const Mentorship = () => {
                                     >
                                         <div className="flex items-start justify-between mb-4">
                                             <div className="relative">
-                                                <div className="w-16 h-16 rounded-full bg-purple-600 dark:bg-[#8c30e8] text-white flex items-center justify-center text-xl font-bold shadow-sm">
-                                                    {mentor.initials}
+                                                <div className="w-16 h-16 rounded-full bg-purple-600 dark:bg-[#8c30e8] text-white flex items-center justify-center text-xl font-bold shadow-sm overflow-hidden border-2 border-white dark:border-white/10">
+                                                    {mentor.profilePicture ? (
+                                                        <img src={mentor.profilePicture} alt={mentor.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        mentor.initials
+                                                    )}
                                                 </div>
-                                                <span
-                                                    className={`absolute bottom-0 right-0 w-4 h-4 rounded-full border-2 border-white dark:border-[#0f0a16] ${
-                                                        mentor.active ? 'bg-green-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'
-                                                    }`}
-                                                />
+
                                             </div>
 
-                                            {mentor.rating !== null ? (
-                                                <div className="px-2 py-1 rounded-lg bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-400/20 text-yellow-600 dark:text-yellow-400 font-bold flex items-center gap-1 text-xs">
-                                                    <Star className="w-3.5 h-3.5 fill-current" /> {mentor.rating}
-                                                </div>
-                                            ) : (
-                                                <div className="px-2 py-1 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-400/20 text-blue-600 dark:text-blue-400 font-bold text-xs capitalize">
-                                                    {mentor.status}
-                                                </div>
-                                            )}
+                                            <div className="px-2 py-1 rounded-lg bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-400/20 text-yellow-600 dark:text-yellow-400 font-bold flex items-center gap-1 text-xs">
+                                                <Star className="w-3.5 h-3.5 fill-current" /> {mentor.rating || '5.0'}
+                                            </div>
                                         </div>
 
                                         <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                                             {mentor.name}
                                         </h3>
-                                        <p className="text-purple-600 dark:text-purple-400 font-medium mt-1 text-sm">{mentor.title}</p>
+                                        <div className="flex items-center justify-between mt-1">
+                                            <p className="text-purple-600 dark:text-purple-400 font-medium text-sm">{mentor.title}</p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2 mb-4 mt-2">
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-bold uppercase rounded-xl border border-green-100 dark:border-green-500/20">
+                                                <Users size={12} />
+                                                <span className="text-sm font-black">{mentor.sessions || 0}</span> sessions
+                                            </div>
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase rounded-xl border border-purple-100 dark:border-purple-500/20">
+                                                <Sparkles size={12} />
+                                                {mentor.skillLevel || 'Expert'}
+                                            </div>
+                                        </div>
                                         <p className="text-slate-500 dark:text-slate-400 mt-3 leading-relaxed min-h-[60px] text-sm line-clamp-3">
                                             {mentor.bio}
                                         </p>
@@ -565,10 +589,10 @@ const Mentorship = () => {
                                         <div className="mt-auto pt-4 border-t border-slate-100 dark:border-white/10 flex items-end justify-between gap-3">
                                             <div>
                                                 <div className="text-slate-400 dark:text-slate-500 text-[10px] uppercase font-bold tracking-wider mb-0.5">Rate</div>
-                                                {mentor.rate !== null ? (
+                                                 {mentor.rate !== null ? (
                                                     <div className="text-lg font-extrabold text-slate-900 dark:text-white">
-                                                        ${mentor.rate}
-                                                        <span className="text-sm text-slate-400 dark:text-slate-500 font-medium">/hr</span>
+                                                        {mentor.rate}
+                                                        <span className="text-sm text-slate-400 dark:text-slate-500 font-medium"> / session</span>
                                                     </div>
                                                 ) : (
                                                     <div className="text-xs font-semibold text-slate-500">Not specified</div>
@@ -714,9 +738,19 @@ const Mentorship = () => {
                                     <h4 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">{bookingMentor.name}</h4>
                                     <p className="text-purple-600 dark:text-purple-400 font-medium text-sm mt-1">{bookingMentor.title}</p>
                                     
-                                    <div className="mt-3 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 border border-slate-200 dark:border-white/10">
-                                        <span className={`w-2 h-2 rounded-full ${selectedMentorWeeklySlotsCount > 0 ? 'bg-green-500' : 'bg-gray-400'}`} />
-                                        {selectedMentorWeeklySlotsCount > 0 ? 'Availability Set' : 'Availability Not Set'}
+                                    <div className="flex flex-wrap justify-center gap-2 mt-3">
+                                        <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 border border-slate-200 dark:border-white/10">
+                                            <span className={`w-2 h-2 rounded-full ${selectedMentorWeeklySlotsCount > 0 ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                            {selectedMentorWeeklySlotsCount > 0 ? 'Availability Set' : 'Availability Not Set'}
+                                        </div>
+                                        <div className="px-3 py-1 rounded-full bg-green-50 dark:bg-green-500/10 text-green-600 dark:text-green-400 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 border border-green-200 dark:border-green-400/20">
+                                            <Users size={10} />
+                                            {bookingMentor.sessions || 0} Sessions
+                                        </div>
+                                        <div className="px-3 py-1 rounded-full bg-yellow-50 dark:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-[10px] font-bold uppercase tracking-wider inline-flex items-center gap-1.5 border border-yellow-200 dark:border-yellow-400/20">
+                                            <Star size={10} className="fill-current" />
+                                            {bookingMentor.rating || '5.0'}
+                                        </div>
                                     </div>
                                     
                                     <p className="mt-6 text-slate-600 dark:text-slate-400 max-w-sm text-sm leading-relaxed">{bookingMentor.bio}</p>
@@ -733,15 +767,11 @@ const Mentorship = () => {
                                     </div>
                                 </div>
 
-                                <div className="mt-8 grid grid-cols-2 gap-3">
-                                    <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-black/20 text-center">
-                                        <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Status</div>
-                                        <div className="text-lg font-bold text-slate-900 dark:text-white mt-1 capitalize">{bookingMentor.status}</div>
-                                    </div>
+                                <div className="mt-8">
                                     <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-4 bg-slate-50 dark:bg-black/20 text-center">
                                         <div className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Rate</div>
                                         <div className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                                            {bookingMentor.rate !== null ? `$${bookingMentor.rate}/hr` : 'Not specified'}
+                                            {bookingMentor.rate !== null ? `${bookingMentor.rate} / session` : 'Not specified'}
                                         </div>
                                     </div>
                                 </div>

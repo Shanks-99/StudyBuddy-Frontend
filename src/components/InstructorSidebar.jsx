@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { logout } from '../services/authService';
+import { logout, getCurrentUser } from '../services/authService';
 import {
     LayoutDashboard,
     Users,
@@ -16,6 +16,12 @@ import {
 const InstructorSidebar = ({ activeTab, onTabChange }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const navigate = useNavigate();
+    const user = getCurrentUser();
+
+    const getInitials = (name) => {
+        if (!name) return 'IN';
+        return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+    };
 
     const sidebarItems = [
         { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -151,20 +157,44 @@ const InstructorSidebar = ({ activeTab, onTabChange }) => {
                 })}
             </nav>
 
-            {/* ── Bottom Actions (Logout) ── */}
+            {/* ── Bottom Actions (Profile & Logout) ── */}
             <div className="px-3 pb-4 border-t border-border dark:border-white/[0.06] pt-3 space-y-1">
+                <button
+                    onClick={() => onTabChange('settings')}
+                    className={`
+                        flex items-center gap-3 w-full p-2 rounded-xl
+                        bg-slate-100/50 dark:bg-white/[0.03] border border-slate-200 dark:border-white/5
+                        hover:bg-slate-200/50 dark:hover:bg-white/10 transition-all group/profile
+                        ${isCollapsed ? "justify-center" : "px-3"}
+                    `}
+                >
+                    <div className="w-9 h-9 rounded-lg bg-purple-600 dark:bg-[#8c30e8] text-white flex items-center justify-center text-xs font-bold shrink-0 shadow-lg shadow-purple-500/20">
+                        {user?.avatar ? (
+                            <img src={user.avatar} alt="" className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                            getInitials(user?.name)
+                        )}
+                    </div>
+                    {!isCollapsed && (
+                        <div className="flex-1 text-left overflow-hidden">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white truncate">{user?.name || 'Instructor'}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">View Profile</div>
+                        </div>
+                    )}
+                </button>
+
                 <button
                     onClick={handleLogout}
                     className={`
                         group relative flex items-center gap-3 w-full rounded-xl
                         text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300
-                        transition-colors
+                        transition-colors mt-2
                         ${isCollapsed ? "justify-center px-0 py-3" : "px-4 py-3"}
                     `}
                 >
                     <LogOut size={18} className="shrink-0" />
                     {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
-
+                    
                     {isCollapsed && (
                         <span
                             className="

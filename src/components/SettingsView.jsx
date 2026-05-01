@@ -11,9 +11,14 @@ import {
     CheckCircle2, 
     AlertTriangle,
     Camera,
-    Loader2
+    Loader2,
+    Tags,
+    X,
+    Upload,
+    FileText
 } from 'lucide-react';
 import { getCurrentUser, updateProfile, changePassword, deleteAccount, logout } from '../services/authService';
+import { getInstructorMentorProfile, saveInstructorMentorProfile } from '../services/instructorMentorProfileService';
 import { useNavigate } from 'react-router-dom';
 
 const SettingsView = ({ isDark, setIsDark }) => {
@@ -30,8 +35,17 @@ const SettingsView = ({ isDark, setIsDark }) => {
         avatar: '',
         grade: '',
         field: '',
-        bio: ''
+        bio: '',
+        // Mentor specific
+        qualification: '',
+        specializedCourses: '',
+        skillLevel: 'Beginner',
+        tags: [],
+        degreeFiles: [],
+        hourlyRate: ''
     });
+
+    const [tagInput, setTagInput] = useState('');
 
     // Password State
     const [passwordForm, setPasswordForm] = useState({
@@ -48,18 +62,50 @@ const SettingsView = ({ isDark, setIsDark }) => {
     });
 
     useEffect(() => {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-            setUser(currentUser);
-            setProfileForm({
-                name: currentUser.name || '',
-                email: currentUser.email || '',
-                avatar: currentUser.avatar || '',
-                grade: currentUser.grade || '',
-                field: currentUser.field || '',
-                bio: currentUser.bio || ''
-            });
-        }
+        const initialize = async () => {
+            const currentUser = getCurrentUser();
+            if (currentUser) {
+                setUser(currentUser);
+                
+                let initialForm = {
+                    name: currentUser.name || '',
+                    email: currentUser.email || '',
+                    avatar: currentUser.avatar || '',
+                    grade: currentUser.grade || '',
+                    field: currentUser.field || '',
+                    bio: '',
+                    qualification: '',
+                    specializedCourses: '',
+                    skillLevel: 'Beginner',
+                    tags: [],
+                    degreeFiles: [],
+                    hourlyRate: ''
+                };
+
+                if (currentUser.role === 'teacher') {
+                    try {
+                        const mentorProfile = await getInstructorMentorProfile();
+                        if (mentorProfile) {
+                            initialForm = {
+                                ...initialForm,
+                                qualification: mentorProfile.qualification ?? '',
+                                specializedCourses: mentorProfile.specializedCourses ?? '',
+                                skillLevel: mentorProfile.skillLevel ?? 'Beginner',
+                                tags: Array.isArray(mentorProfile.tags) ? mentorProfile.tags : [],
+                                degreeFiles: Array.isArray(mentorProfile.degreeFiles) ? mentorProfile.degreeFiles : [],
+                                bio: mentorProfile.description ?? currentUser.bio ?? '',
+                                hourlyRate: mentorProfile.hourlyRate ?? ''
+                            };
+                        }
+                    } catch (error) {
+                        console.error('Failed to load mentor profile in settings:', error);
+                    }
+                }
+                
+                setProfileForm(initialForm);
+            }
+        };
+        initialize();
     }, []);
 
     const showMessage = (type, text) => {
@@ -71,7 +117,32 @@ const SettingsView = ({ isDark, setIsDark }) => {
         e.preventDefault();
         setLoading(true);
         try {
-            const res = await updateProfile(profileForm);
+            // Update base auth profile
+            const res = await updateProfile({
+                name: profileForm.name,
+                email: profileForm.email,
+                avatar: profileForm.avatar,
+                grade: profileForm.grade,
+                field: profileForm.field,
+                bio: profileForm.bio
+            });
+            
+            // If teacher, also update mentor profile
+            if (user?.role === 'teacher') {
+                await saveInstructorMentorProfile({
+                    name: profileForm.name,
+                    email: profileForm.email,
+                    qualification: profileForm.qualification,
+                    specializedCourses: profileForm.specializedCourses,
+                    skillLevel: profileForm.skillLevel,
+                    tags: profileForm.tags,
+                    description: profileForm.bio,
+                    profilePicture: profileForm.avatar,
+                    degreeFiles: profileForm.degreeFiles,
+                    hourlyRate: profileForm.hourlyRate
+                });
+            }
+
             setUser(res.user);
             showMessage('success', 'Profile updated successfully!');
         } catch (err) {
@@ -270,14 +341,151 @@ const SettingsView = ({ isDark, setIsDark }) => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Bio</label>
+                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Bio / Description</label>
                                     <textarea 
                                         rows="4" 
                                         value={profileForm.bio} 
                                         onChange={e => setProfileForm({...profileForm, bio: e.target.value})}
                                         className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm resize-none"
+                                        placeholder={user?.role === 'teacher' ? "Tell students about your background..." : "Write a short bio..."}
                                     />
                                 </div>
+
+                                {user?.role === 'teacher' && (
+                                    <div className="space-y-8 pt-6 border-t border-slate-100 dark:border-white/5">
+                                        <div>
+                                            <h4 className="text-sm font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest mb-6">Mentor Professional Details</h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Highest Qualification</label>
+                                                    <input 
+                                                        value={profileForm.qualification} 
+                                                        onChange={e => setProfileForm({...profileForm, qualification: e.target.value})}
+                                                        className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
+                                                        placeholder="e.g. MS in Computer Science"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Subjects Taught</label>
+                                                    <input 
+                                                        value={profileForm.specializedCourses} 
+                                                        onChange={e => setProfileForm({...profileForm, specializedCourses: e.target.value})}
+                                                        className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
+                                                        placeholder="e.g. OOP, Data Structures"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Rate per Session</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={profileForm.hourlyRate} 
+                                                        onChange={e => {
+                                                            const val = e.target.value.replace(/[^0-9]/g, '');
+                                                            setProfileForm({...profileForm, hourlyRate: val})
+                                                        }}
+                                                        className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
+                                                        placeholder="e.g. 25"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Skill Level</label>
+                                            <div className="flex gap-2">
+                                                {['Beginner', 'Intermediate', 'Advanced'].map(level => (
+                                                    <button
+                                                        key={level}
+                                                        type="button"
+                                                        onClick={() => setProfileForm({ ...profileForm, skillLevel: level })}
+                                                        className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all border ${
+                                                            profileForm.skillLevel === level 
+                                                            ? 'bg-purple-600 border-purple-600 text-white shadow-md' 
+                                                            : 'bg-slate-100 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-600 dark:text-gray-400'
+                                                        }`}
+                                                    >
+                                                        {level}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 flex items-center gap-2">
+                                                <Tags size={14} /> Expertise Tags
+                                            </label>
+                                            <div className="flex gap-2">
+                                                <input 
+                                                    value={tagInput}
+                                                    onChange={e => setTagInput(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (tagInput.trim() && !profileForm.tags.includes(tagInput.trim())) {
+                                                                setProfileForm({...profileForm, tags: [...profileForm.tags, tagInput.trim()]});
+                                                                setTagInput('');
+                                                            }
+                                                        }
+                                                    }}
+                                                    className="flex-1 px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
+                                                    placeholder="Type and press Enter to add tags"
+                                                />
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {profileForm.tags.map(tag => (
+                                                    <span key={tag} className="px-3 py-1 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase rounded-lg border border-purple-100 dark:border-purple-500/20 flex items-center gap-2 group">
+                                                        {tag}
+                                                        <button 
+                                                            type="button" 
+                                                            onClick={() => setProfileForm({...profileForm, tags: profileForm.tags.filter(t => t !== tag)})}
+                                                            className="hover:text-red-500 transition-colors"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 flex items-center gap-2">
+                                                <Upload size={14} /> Degree Documents
+                                            </label>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <label className="border-2 border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 dark:hover:bg-white/5 transition-all cursor-pointer group">
+                                                    <Upload size={20} className="text-slate-400 mb-2 group-hover:text-purple-500 transition-colors" />
+                                                    <span className="text-xs font-bold">Upload Document</span>
+                                                    <input 
+                                                        type="file" 
+                                                        multiple 
+                                                        className="hidden" 
+                                                        onChange={e => {
+                                                            const files = Array.from(e.target.files).map(f => f.name);
+                                                            setProfileForm({...profileForm, degreeFiles: [...profileForm.degreeFiles, ...files]});
+                                                        }} 
+                                                    />
+                                                </label>
+                                                <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-2">
+                                                    {profileForm.degreeFiles.map((file, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-lg">
+                                                            <div className="flex items-center gap-2 overflow-hidden">
+                                                                <FileText size={14} className="text-slate-400 shrink-0" />
+                                                                <span className="text-[10px] font-medium truncate">{file}</span>
+                                                            </div>
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setProfileForm({...profileForm, degreeFiles: profileForm.degreeFiles.filter((_, i) => i !== idx)})}
+                                                                className="text-slate-400 hover:text-red-500"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <button 
                                     type="submit"
