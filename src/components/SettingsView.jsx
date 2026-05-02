@@ -21,7 +21,7 @@ import { getCurrentUser, updateProfile, changePassword, deleteAccount, logout } 
 import { getInstructorMentorProfile, saveInstructorMentorProfile } from '../services/instructorMentorProfileService';
 import { useNavigate } from 'react-router-dom';
 
-const SettingsView = ({ isDark, setIsDark }) => {
+const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
     const [user, setUser] = useState(null);
     const [activeSection, setActiveSection] = useState('profile');
     const [loading, setLoading] = useState(false);
@@ -145,6 +145,9 @@ const SettingsView = ({ isDark, setIsDark }) => {
 
             setUser(res.user);
             showMessage('success', 'Profile updated successfully!');
+            if (onProfileUpdate) {
+                onProfileUpdate();
+            }
         } catch (err) {
             showMessage('error', err.response?.data?.msg || 'Failed to update profile');
         } finally {
@@ -459,9 +462,17 @@ const SettingsView = ({ isDark, setIsDark }) => {
                                                         type="file" 
                                                         multiple 
                                                         className="hidden" 
-                                                        onChange={e => {
-                                                            const files = Array.from(e.target.files).map(f => f.name);
-                                                            setProfileForm({...profileForm, degreeFiles: [...profileForm.degreeFiles, ...files]});
+                                                        onChange={async e => {
+                                                            const filesArray = Array.from(e.target.files);
+                                                            const base64Promises = filesArray.map(f => {
+                                                                return new Promise((resolve) => {
+                                                                    const reader = new FileReader();
+                                                                    reader.onloadend = () => resolve(`${f.name}|DATA|${reader.result}`);
+                                                                    reader.readAsDataURL(f);
+                                                                });
+                                                            });
+                                                            const base64Files = await Promise.all(base64Promises);
+                                                            setProfileForm({...profileForm, degreeFiles: [...profileForm.degreeFiles, ...base64Files]});
                                                         }} 
                                                     />
                                                 </label>
@@ -470,7 +481,7 @@ const SettingsView = ({ isDark, setIsDark }) => {
                                                         <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 rounded-lg">
                                                             <div className="flex items-center gap-2 overflow-hidden">
                                                                 <FileText size={14} className="text-slate-400 shrink-0" />
-                                                                <span className="text-[10px] font-medium truncate">{file}</span>
+                                                                <span className="text-[10px] font-medium truncate">{file && file.includes && file.includes('|DATA|') ? file.split('|DATA|')[0] : file && file.startsWith && file.startsWith('data:') ? `Document ${idx + 1}` : file}</span>
                                                             </div>
                                                             <button 
                                                                 type="button" 

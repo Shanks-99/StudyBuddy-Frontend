@@ -4,7 +4,9 @@ export const generateQuizWithAI = async (topic, difficulty, numQuestions) => {
     const response = await api.post('/quiz/generate', {
         topic,
         difficulty,
-        numQuestions
+        numQuestions: numQuestions || 5
+    }, {
+        timeout: 300000 // 5 minute timeout for AI generation
     });
     return response.data;
 };

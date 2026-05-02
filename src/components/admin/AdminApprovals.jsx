@@ -74,7 +74,24 @@ const AdminApprovals = () => {
                             <div><span className="font-bold text-slate-500">Skill Level:</span> <span className="dark:text-white">{selected.skillLevel}</span></div>
                             <div><span className="font-bold text-slate-500">Rate:</span> <span className="dark:text-white">{selected.hourlyRate}/session</span></div>
                             <div><span className="font-bold text-slate-500">Tags:</span> <span className="dark:text-white">{(selected.tags||[]).join(', ')}</span></div>
-                            <div><span className="font-bold text-slate-500">Documents:</span> <span className="dark:text-white">{(selected.degreeFiles||[]).length} file(s) uploaded</span></div>
+                            <div className="flex flex-col gap-1">
+                                <div><span className="font-bold text-slate-500">Documents:</span> <span className="dark:text-white">{(selected.degreeFiles||[]).length} file(s) uploaded</span></div>
+                                {selected.degreeFiles && selected.degreeFiles.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                        {selected.degreeFiles.map((file, idx) => {
+                                            const hasData = file.includes('|DATA|');
+                                            const displayUrl = hasData ? file.split('|DATA|')[1] : file;
+                                            const displayName = hasData ? file.split('|DATA|')[0] : file;
+                                            const isUrl = displayUrl.startsWith('http') || displayUrl.startsWith('data:');
+                                            return (
+                                                <a key={idx} href={isUrl ? displayUrl : '#'} download={isUrl ? displayName : undefined} target={isUrl ? "_blank" : undefined} rel="noreferrer" onClick={(e) => { if (!isUrl) { e.preventDefault(); alert(`Document content is not available. Only the filename (${displayName}) was uploaded.`); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors truncate max-w-full">
+                                                    <FileText size={14} className="shrink-0" /> <span className="truncate">{hasData ? displayName : `Download Document ${idx + 1}`}</span>
+                                                </a>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                             <div><span className="font-bold text-slate-500">Description:</span><p className="dark:text-slate-300 mt-1">{selected.description}</p></div>
                         </div>
                         <div className="mt-4"><label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Admin Notes</label><textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 text-sm outline-none dark:text-white" placeholder="Optional notes..." /></div>

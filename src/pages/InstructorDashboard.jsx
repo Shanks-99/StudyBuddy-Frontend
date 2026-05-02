@@ -24,7 +24,8 @@ import {
     Search,
     Bell,
     UserCircle2,
-    X
+    X,
+    AlertCircle
 } from 'lucide-react';
 import InstructorSidebar from '../components/InstructorSidebar';
 import { useMemo } from 'react';
@@ -80,8 +81,8 @@ const InstructorDashboard = () => {
     // Sync activeTab with URL
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const tab = params.get('tab');
-        if (tab && tab !== activeTab) {
+        const tab = params.get('tab') || 'dashboard';
+        if (tab !== activeTab) {
             setActiveTab(tab);
         }
     }, [location.search, activeTab]);
@@ -96,6 +97,19 @@ const InstructorDashboard = () => {
             localStorage.setItem('studybuddy-theme', 'light');
         }
         setIsDark(val);
+    };
+
+    const fetchProfileStatus = async () => {
+        try {
+            const existingProfile = await getInstructorMentorProfile();
+            if (existingProfile) {
+                setProfileStatus(existingProfile.status || 'pending');
+            } else {
+                setProfileStatus('missing');
+            }
+        } catch (error) {
+            console.error('Failed to load mentor profile:', error);
+        }
     };
 
     useEffect(() => {
@@ -118,20 +132,7 @@ const InstructorDashboard = () => {
 
             setUser(currentUser);
             fetchDashboardData(currentUser.name);
-
-            try {
-                const existingProfile = await getInstructorMentorProfile();
-
-                if (existingProfile) {
-                    setProfileStatus(existingProfile.status || 'pending');
-                } else {
-                    setProfileStatus('missing');
-                    // Redirect to profile setup if missing
-                    navigate('/instructor-profile?setup=1');
-                }
-            } catch (error) {
-                console.error('Failed to load mentor profile:', error);
-            }
+            fetchProfileStatus();
         };
 
         initialize();
@@ -193,6 +194,14 @@ const InstructorDashboard = () => {
         }
     };
 
+    const handleTabChange = (tabId) => {
+        if (tabId === 'dashboard') {
+            navigate('/instructor-dashboard');
+        } else {
+            navigate(`/instructor-dashboard?tab=${tabId}`);
+        }
+    };
+
 
 
     if (!user) return null;
@@ -230,16 +239,28 @@ const InstructorDashboard = () => {
 
             {/* Sidebar */}
             {/* Sidebar */}
-            <InstructorSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+            <InstructorSidebar activeTab={activeTab} onTabChange={handleTabChange} profileStatus={profileStatus} />
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative z-10">
                 {activeTab === 'settings' ? (
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                        <SettingsView isDark={isDark} setIsDark={toggleTheme} />
+                        <SettingsView isDark={isDark} setIsDark={toggleTheme} onProfileUpdate={fetchProfileStatus} />
                     </div>
                 ) : (
                     <>
+                        {profileStatus !== 'approved' && (
+                            <div className={`text-white px-6 py-3 text-sm font-bold flex items-center justify-center gap-2 shadow-md z-20 relative ${profileStatus === 'pending' ? 'bg-amber-500' : 'bg-red-500'}`}>
+                                <AlertCircle size={18} />
+                                <span>
+                                    {profileStatus === 'pending' 
+                                        ? 'Your profile has been updated and is currently under review by our administration team.'
+                                        : profileStatus === 'rejected'
+                                        ? 'Your profile was reviewed and requires changes. Please update it for re-evaluation.'
+                                        : 'Update your profile to get accessed to different modules of mentor.'}
+                                </span>
+                            </div>
+                        )}
                         <div className="px-6 py-8">
                             <div className="max-w-7xl mx-auto">
                                 <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">

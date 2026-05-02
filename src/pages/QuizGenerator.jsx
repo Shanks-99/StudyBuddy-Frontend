@@ -251,7 +251,7 @@ const QuizGenerator = () => {
                                             min="1"
                                             max="20"
                                             value={aiForm.numQuestions}
-                                            onChange={(e) => setAiForm({ ...aiForm, numQuestions: parseInt(e.target.value) })}
+                                            onChange={(e) => setAiForm({ ...aiForm, numQuestions: parseInt(e.target.value) || 5 })}
                                             required
                                             className="w-full px-4 py-2.5 rounded-xl border transition-colors bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8] text-sm"
                                         />

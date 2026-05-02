@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Ban, Trash2, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Ban, Trash2, Eye, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { getAllMentors, toggleUserBan, deleteUser } from '../../services/adminService';
 
 const AdminMentors = () => {
@@ -85,7 +85,24 @@ const AdminMentors = () => {
                                 <div><span className="font-bold text-slate-500">Skill Level:</span> <span className="text-slate-900 dark:text-white">{p.skillLevel}</span></div>
                                 <div><span className="font-bold text-slate-500">Rate:</span> <span className="text-slate-900 dark:text-white">{p.hourlyRate}/session</span></div>
                                 <div><span className="font-bold text-slate-500">Tags:</span> <span className="text-slate-900 dark:text-white">{(p.tags||[]).join(', ') || '—'}</span></div>
-                                <div><span className="font-bold text-slate-500">Documents:</span> <span className="text-slate-900 dark:text-white">{(p.degreeFiles||[]).length} file(s)</span></div>
+                                <div className="flex flex-col gap-1">
+                                    <div><span className="font-bold text-slate-500">Documents:</span> <span className="text-slate-900 dark:text-white">{(p.degreeFiles||[]).length} file(s) uploaded</span></div>
+                                    {p.degreeFiles && p.degreeFiles.length > 0 && (
+                                        <div className="flex flex-wrap gap-2 mt-1">
+                                            {p.degreeFiles.map((file, idx) => {
+                                                const hasData = file.includes('|DATA|');
+                                                const displayUrl = hasData ? file.split('|DATA|')[1] : file;
+                                                const displayName = hasData ? file.split('|DATA|')[0] : file;
+                                                const isUrl = displayUrl.startsWith('http') || displayUrl.startsWith('data:');
+                                                return (
+                                                    <a key={idx} href={isUrl ? displayUrl : '#'} download={isUrl ? displayName : undefined} target={isUrl ? "_blank" : undefined} rel="noreferrer" onClick={(e) => { if (!isUrl) { e.preventDefault(); alert(`Document content is not available. Only the filename (${displayName}) was uploaded.`); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors truncate max-w-full">
+                                                        <FileText size={14} className="shrink-0" /> <span className="truncate">{hasData ? displayName : `Download Document ${idx + 1}`}</span>
+                                                    </a>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
                                 <div><span className="font-bold text-slate-500">Description:</span> <p className="text-slate-700 dark:text-slate-300 mt-1">{p.description}</p></div>
                             </div>
                         ) : <p className="text-slate-400">No profile submitted.</p>; })()}

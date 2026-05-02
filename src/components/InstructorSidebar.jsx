@@ -13,7 +13,7 @@ import {
     ChevronLeft
 } from 'lucide-react';
 
-const InstructorSidebar = ({ activeTab, onTabChange }) => {
+const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const navigate = useNavigate();
     const user = getCurrentUser();
@@ -43,6 +43,11 @@ const InstructorSidebar = ({ activeTab, onTabChange }) => {
     };
 
     const handleNavigation = (item) => {
+        if (profileStatus && profileStatus !== 'approved' && item.id !== 'dashboard' && item.id !== 'settings') {
+            alert('Update your profile to get accessed to different modules of mentor');
+            return;
+        }
+
         if (item.route) {
             navigate(item.route);
         } else if (onTabChange) {
@@ -113,6 +118,7 @@ const InstructorSidebar = ({ activeTab, onTabChange }) => {
                                         ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:shadow-[inset_0_0_20px_rgba(140,48,232,0.08)]"
                                         : "text-muted-foreground dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white"
                                 }
+                                ${profileStatus && profileStatus !== 'approved' && item.id !== 'dashboard' && item.id !== 'settings' ? 'opacity-50 cursor-not-allowed' : ''}
                             `}
                         >
                             {/* Active indicator bar */}
