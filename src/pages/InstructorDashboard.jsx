@@ -56,7 +56,9 @@ const InstructorDashboard = () => {
         return params.get('tab') || 'dashboard';
     });
     const [showProfileModal, setShowProfileModal] = useState(false);
-    const [profileStatus, setProfileStatus] = useState('missing');
+    const [profileStatus, setProfileStatus] = useState(null); // Changed from 'missing' to null to avoid flicker
+    const [hasAvailability, setHasAvailability] = useState(true);
+    const [loadingProfile, setLoadingProfile] = useState(true);
     const [loading, setLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [sessionRequests, setSessionRequests] = useState([]);
@@ -104,11 +106,21 @@ const InstructorDashboard = () => {
             const existingProfile = await getInstructorMentorProfile();
             if (existingProfile) {
                 setProfileStatus(existingProfile.status || 'pending');
+                
+                // Check if any availability is set
+                const availability = existingProfile.weeklyAvailability || {};
+                const hasSlots = Object.values(availability).some(
+                    slots => Array.isArray(slots) && slots.length > 0
+                );
+                setHasAvailability(hasSlots);
             } else {
                 setProfileStatus('missing');
+                setHasAvailability(false);
             }
         } catch (error) {
             console.error('Failed to load mentor profile:', error);
+        } finally {
+            setLoadingProfile(false);
         }
     };
 
@@ -228,6 +240,10 @@ const InstructorDashboard = () => {
         { question: 'What is User Interface?', replies: 15, upvotes: 30 },
     ];
 
+    const sessionsThisWeek = upcomingSessions.length;
+    const totalHoursTaught = (sessionsThisWeek * 1.5).toFixed(1);
+    const studentFeedbackScore = "4.8/5.0";
+
     return (
         <div className="flex h-screen bg-background dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans transition-colors duration-300 overflow-hidden relative">
 
@@ -238,8 +254,11 @@ const InstructorDashboard = () => {
             </div>
 
             {/* Sidebar */}
-            {/* Sidebar */}
-            <InstructorSidebar activeTab={activeTab} onTabChange={handleTabChange} profileStatus={profileStatus} />
+            <InstructorSidebar 
+                activeTab={activeTab} 
+                onTabChange={handleTabChange} 
+                profileStatus={loadingProfile ? 'approved' : profileStatus} // Treat as approved while loading to avoid lock flicker
+            />
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col overflow-hidden relative z-10">
@@ -247,17 +266,45 @@ const InstructorDashboard = () => {
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                         <SettingsView isDark={isDark} setIsDark={toggleTheme} onProfileUpdate={fetchProfileStatus} />
                     </div>
+                ) : ['students', 'community', 'resources'].includes(activeTab) ? (
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                        <div className="max-w-7xl mx-auto">
+                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 rounded-3xl p-12 text-center shadow-xl">
+                                <div className="w-20 h-20 bg-purple-100 dark:bg-[#8c30e8]/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                                    {activeTab === 'students' && <Users className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
+                                    {activeTab === 'community' && <MessageSquare className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
+                                    {activeTab === 'resources' && <BookOpen className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
+                                </div>
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
+                                    {activeTab === 'students' && 'My Students Module'}
+                                    {activeTab === 'community' && 'Community Module'}
+                                    {activeTab === 'resources' && 'Resource Hub Module'}
+                                </h2>
+                                <p className="text-slate-500 dark:text-gray-400 max-w-md mx-auto mb-8">
+                                    {activeTab === 'students' && 'Soon you will be able to manage your students, track their progress, and send direct messages.'}
+                                    {activeTab === 'community' && 'The community module is coming soon! You will be able to interact with other mentors and students.'}
+                                    {activeTab === 'resources' && 'We are building a centralized hub for all your teaching materials and study guides.'}
+                                </p>
+                                <button 
+                                    onClick={() => handleTabChange('dashboard')}
+                                    className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-600/20 transition-all"
+                                >
+                                    Back to Dashboard
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 ) : (
                     <>
-                        {profileStatus !== 'approved' && (
+                        {(!loadingProfile && profileStatus && profileStatus !== 'approved') && (
                             <div className={`text-white px-6 py-3 text-sm font-bold flex items-center justify-center gap-2 shadow-md z-20 relative ${profileStatus === 'pending' ? 'bg-amber-500' : 'bg-red-500'}`}>
                                 <AlertCircle size={18} />
                                 <span>
                                     {profileStatus === 'pending' 
-                                        ? 'Your profile has been updated and is currently under review by our administration team.'
+                                        ? 'Your profile is under review. You will be available for students once approved by an admin.'
                                         : profileStatus === 'rejected'
                                         ? 'Your profile was reviewed and requires changes. Please update it for re-evaluation.'
-                                        : 'Update your profile to get accessed to different modules of mentor.'}
+                                        : 'Update your profile to get access to different mentor modules.'}
                                 </span>
                             </div>
                         )}
@@ -291,7 +338,7 @@ const InstructorDashboard = () => {
                                     ))}
                                 </div>
 
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
                                     {/* Upcoming Sessions */}
                                     <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex flex-col">
@@ -410,22 +457,24 @@ const InstructorDashboard = () => {
                                         </div>
                                         <div className="space-y-4 flex-1">
                                             <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 transition-colors">
-                                                <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">12</div>
+                                                <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">{sessionsThisWeek}</div>
                                                 <div className="text-xs font-bold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/70 mt-1">Sessions This Week</div>
                                             </div>
                                             <div className="bg-purple-50 dark:bg-[#8c30e8]/10 rounded-xl p-4 border border-purple-200 dark:border-[#8c30e8]/20 hover:bg-purple-100 transition-colors">
-                                                <div className="text-2xl font-extrabold text-purple-700 dark:text-[#8c30e8]">18.5 hrs</div>
+                                                <div className="text-2xl font-extrabold text-purple-700 dark:text-[#8c30e8]">{totalHoursTaught} hrs</div>
                                                 <div className="text-xs font-bold uppercase tracking-wider text-purple-600/70 dark:text-purple-400/70 mt-1">Total Hours Taught</div>
                                             </div>
                                             <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 transition-colors">
-                                                <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">4.8/5.0</div>
+                                                <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">{studentFeedbackScore}</div>
                                                 <div className="text-xs font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/70 mt-1">Student Feedback Score</div>
                                             </div>
                                         </div>
                                     </div>
+                                </div>
 
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                     {/* Resource Management */}
-                                    <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 lg:col-span-2">
+                                    <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 lg:col-span-2 flex flex-col h-full">
                                         <div className="flex items-center justify-between mb-6">
                                             <h3 className="text-xl font-bold text-slate-900 dark:text-white">My Resources</h3>
                                             <div className="p-2 bg-purple-50 dark:bg-[#8c30e8]/10 rounded-lg">
@@ -464,8 +513,7 @@ const InstructorDashboard = () => {
                                     </div>
 
                                     {/* Weekly Summary & Community Layout container */}
-                                    <div className="flex flex-col gap-6 lg:col-span-1">
-
+                                    <div className="flex flex-col gap-6 lg:col-span-1 h-full">
 
                                         {/* Community Interaction */}
                                         <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-6 flex-1">

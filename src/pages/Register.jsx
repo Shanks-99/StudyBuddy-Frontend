@@ -172,7 +172,7 @@ const Register = () => {
             checkColor: "text-purple-600 dark:text-[#8c30e8]",
         },
         teacher: {
-            title: "Teacher",
+            title: "Mentor",
             description: "I want to guide others and share resources.",
             icon: Briefcase,
             primaryColor: "border-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:border-blue-500",

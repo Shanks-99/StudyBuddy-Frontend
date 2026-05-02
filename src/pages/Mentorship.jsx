@@ -464,7 +464,7 @@ const Mentorship = () => {
                 <header className="bg-white/80 dark:bg-[#0f0a16]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 p-4 md:px-8 flex items-center justify-between z-20">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-purple-600 dark:bg-[#8c30e8] flex items-center justify-center shadow-md">
-                            <Sparkles className="w-5 h-5 text-white" />
+                            <Users className="w-5 h-5 text-white" />
                         </div>
                         <div>
                             <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-900 dark:text-white tracking-wide">Mentorship Hub</h1>

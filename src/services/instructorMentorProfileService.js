@@ -1,8 +1,21 @@
 import api from './api';
 
-export const getInstructorMentorProfile = async () => {
-    const response = await api.get('/mentorship/mentor-profile/me');
-    return response.data?.profile || null;
+let cachedProfile = null;
+
+export const getInstructorMentorProfile = async (forceRefresh = false) => {
+    if (cachedProfile && !forceRefresh) return cachedProfile;
+    try {
+        const response = await api.get('/mentorship/mentor-profile/me');
+        cachedProfile = response.data?.profile || null;
+        return cachedProfile;
+    } catch (error) {
+        console.error("Error fetching mentor profile:", error);
+        return null;
+    }
+};
+
+export const clearMentorProfileCache = () => {
+    cachedProfile = null;
 };
 
 export const getMentorsForStudents = async () => {
@@ -20,13 +33,17 @@ export const isInstructorMentorProfileComplete = (profile) => {
         profile.description,
         profile.qualification,
         profile.skillLevel,
+        profile.hourlyRate
     ];
 
-    const allFilled = required.every((value) => typeof value === 'string' && value.trim().length > 0);
-    const hasTags = Array.isArray(profile.tags) && profile.tags.length > 0;
+    const allFilled = required.every((value) => {
+        if (typeof value === 'number') return value > 0;
+        return typeof value === 'string' && value.trim().length > 0;
+    });
+
     const hasDegreeFiles = Array.isArray(profile.degreeFiles) && profile.degreeFiles.length > 0;
 
-    return allFilled && hasTags && hasDegreeFiles;
+    return allFilled && hasDegreeFiles;
 };
 
 export const saveInstructorMentorProfile = async (profileInput) => {
@@ -37,5 +54,6 @@ export const saveInstructorMentorProfile = async (profileInput) => {
     };
 
     const response = await api.put('/mentorship/mentor-profile/me', payload);
+    clearMentorProfileCache();
     return response.data?.profile || null;
 };

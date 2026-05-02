@@ -71,12 +71,10 @@ const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
         >
             {/* ── Header ── */}
             <div
-                className={`flex items-center h-16 px-4 border-b border-border dark:border-white/[0.06] ${
-                    isCollapsed ? "justify-center" : "justify-between"
-                }`}
+                className={`flex items-center h-16 px-4 border-b border-border dark:border-white/[0.06] ${isCollapsed ? "justify-center" : "justify-between"
+                    }`}
             >
                 <div className={`flex items-center gap-2 overflow-hidden ${isCollapsed ? "justify-center" : ""}`}>
-                    <Sparkles size={22} className="text-purple-600 dark:text-purple-400 shrink-0" />
                     {!isCollapsed && (
                         <span className="font-bold text-lg tracking-wide text-foreground dark:text-white whitespace-nowrap">
                             StudyBuddy
@@ -113,10 +111,9 @@ const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
                                 w-full group relative flex items-center gap-3 rounded-xl
                                 transition-all duration-200 overflow-hidden
                                 ${isCollapsed ? "justify-center px-0 py-3" : "px-4 py-3"}
-                                ${
-                                    isActive
-                                        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:shadow-[inset_0_0_20px_rgba(140,48,232,0.08)]"
-                                        : "text-muted-foreground dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white"
+                                ${isActive
+                                    ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:shadow-[inset_0_0_20px_rgba(140,48,232,0.08)]"
+                                    : "text-muted-foreground dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white"
                                 }
                                 ${profileStatus && profileStatus !== 'approved' && item.id !== 'dashboard' && item.id !== 'settings' ? 'opacity-50 cursor-not-allowed' : ''}
                             `}
@@ -128,11 +125,10 @@ const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
 
                             <item.icon
                                 size={20}
-                                className={`shrink-0 ${
-                                    isActive
+                                className={`shrink-0 ${isActive
                                         ? "text-purple-600 dark:text-purple-400"
                                         : "group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors"
-                                }`}
+                                    }`}
                             />
 
                             {/* Label */}
@@ -200,7 +196,7 @@ const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
                 >
                     <LogOut size={18} className="shrink-0" />
                     {!isCollapsed && <span className="text-sm font-medium">Logout</span>}
-                    
+
                     {isCollapsed && (
                         <span
                             className="

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
-import { Play, Pause, Square, CheckCircle2, Circle, Plus, Trash2, Clock, CalendarDays, Award, Sparkles, Check, RotateCcw } from 'lucide-react';
+import { Play, Pause, Square, CheckCircle2, Circle, Plus, Trash2, Clock, CalendarDays, Award, Headphones, Check, RotateCcw } from 'lucide-react';
 import { saveFocusSession, getFocusSessions } from '../services/focusService';
 
 const FocusRoom = () => {
@@ -143,7 +143,7 @@ const FocusRoom = () => {
                 <div className="bg-white/60 dark:bg-black/40 backdrop-blur-md border-b border-slate-200 dark:border-white/[0.06] p-4 shrink-0 z-20">
                     <div className="flex items-center gap-3 max-w-7xl mx-auto px-2">
                         <div className="p-2.5 bg-purple-50 text-purple-600 dark:bg-[#8c30e8]/20 dark:text-[#8c30e8] rounded-xl shadow-sm">
-                            <Sparkles className="w-5 h-5" />
+                            <Headphones className="w-5 h-5" />
                         </div>
                         <div>
                             <h1 className="text-xl font-bold tracking-wide text-slate-900 dark:text-white">Focus Room</h1>

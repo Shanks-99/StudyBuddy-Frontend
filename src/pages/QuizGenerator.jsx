@@ -278,20 +278,12 @@ const QuizGenerator = () => {
                             </form>
 
                             {/* Status Message */}
-                            {(generationStatus === 'generating' || generationStatus === 'success') && (
+                            {generationStatus === 'success' && (
                                 <div className="mt-5 flex items-center justify-center p-4 bg-slate-50 dark:bg-black/20 rounded-xl border border-slate-100 dark:border-white/5">
-                                    {generationStatus === 'generating' && (
-                                        <div className="flex items-center gap-3 text-purple-600 dark:text-purple-400">
-                                            <Loader2 className="w-5 h-5 animate-spin" />
-                                            <span className="font-bold text-sm">Generating Quiz...</span>
-                                        </div>
-                                    )}
-                                    {generationStatus === 'success' && (
-                                        <div className="flex items-center gap-3 text-green-600 dark:text-green-400">
-                                            <CheckCircle2 className="w-5 h-5" />
-                                            <span className="font-bold text-sm">Quiz generated Successfully!</span>
-                                        </div>
-                                    )}
+                                    <div className="flex items-center gap-3 text-green-600 dark:text-green-400">
+                                        <CheckCircle2 className="w-5 h-5" />
+                                        <span className="font-bold text-sm">Quiz generated Successfully!</span>
+                                    </div>
                                 </div>
                             )}
                         </div>

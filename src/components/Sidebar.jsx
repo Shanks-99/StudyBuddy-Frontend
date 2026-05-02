@@ -27,7 +27,7 @@ const Sidebar = ({ activeTab, onTabChange }) => {
         { id: 'mentorship', icon: Users, label: 'Mentorship System', route: '/mentorship' },
         { id: 'studyroom', icon: Video, label: 'Study Room', route: '/studyroom' },
         { id: 'focusrooms', icon: Headphones, label: 'Focus Rooms', route: '/focusrooms' },
-        { id: 'studybuddy', icon: UserPlus, label: 'Study with Buddy', route: '/studybuddy' },
+        { id: 'studybuddy', icon: UserPlus, label: 'Study with Buddy' },
         { id: 'community', icon: MessageSquare, label: 'Community' },
         { id: 'resources', icon: BookOpen, label: 'Resource Hub' },
         { id: 'settings', icon: Settings, label: 'Settings' },
@@ -45,10 +45,12 @@ const Sidebar = ({ activeTab, onTabChange }) => {
     const handleNavigation = (item) => {
         if (item.route) {
             navigate(item.route);
-        } else if (onTabChange) {
-            onTabChange(item.id);
         } else {
-            navigate('/student-dashboard');
+            // Always update the URL for dashboard tabs to stay in sync
+            navigate(`/student-dashboard?tab=${item.id}`);
+            if (onTabChange) {
+                onTabChange(item.id);
+            }
         }
     };
 
@@ -66,12 +68,11 @@ const Sidebar = ({ activeTab, onTabChange }) => {
         >
             {/* ── Header ── */}
             <div
-                className={`flex items-center h-16 px-4 border-b border-border dark:border-white/[0.06] ${
-                    isCollapsed ? "justify-center" : "justify-between"
-                }`}
+                className={`flex items-center h-16 px-4 border-b border-border dark:border-white/[0.06] ${isCollapsed ? "justify-center" : "justify-between"
+                    }`}
             >
                 <div className={`flex items-center gap-2 overflow-hidden ${isCollapsed ? "justify-center" : ""}`}>
-                    <Sparkles size={22} className="text-purple-600 dark:text-purple-400 shrink-0" aria-hidden="true" />
+
                     {!isCollapsed && (
                         <span className="font-bold text-lg tracking-wide text-foreground dark:text-white whitespace-nowrap">
                             StudyBuddy
@@ -111,10 +112,9 @@ const Sidebar = ({ activeTab, onTabChange }) => {
                                 w-full group relative flex items-center gap-3 rounded-xl
                                 transition-all duration-200 overflow-hidden
                                 ${isCollapsed ? "justify-center px-0 py-3" : "px-4 py-3"}
-                                ${
-                                    isActive
-                                        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:shadow-[inset_0_0_20px_rgba(140,48,232,0.08)]"
-                                        : "text-muted-foreground dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white"
+                                ${isActive
+                                    ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 dark:shadow-[inset_0_0_20px_rgba(140,48,232,0.08)]"
+                                    : "text-muted-foreground dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.04] hover:text-slate-900 dark:hover:text-white"
                                 }
                             `}
                         >
@@ -125,11 +125,10 @@ const Sidebar = ({ activeTab, onTabChange }) => {
 
                             <item.icon
                                 size={20}
-                                className={`shrink-0 ${
-                                    isActive
+                                className={`shrink-0 ${isActive
                                         ? "text-purple-600 dark:text-purple-400"
                                         : "group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors"
-                                }`}
+                                    }`}
                                 aria-hidden="true"
                             />
 

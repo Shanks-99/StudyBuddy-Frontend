@@ -129,13 +129,29 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
             
             // If teacher, also update mentor profile
             if (user?.role === 'teacher') {
+                // Validation for all mentor fields
+                const mentorRequired = [
+                    profileForm.qualification,
+                    profileForm.specializedCourses,
+                    profileForm.bio,
+                    profileForm.hourlyRate
+                ];
+                
+                if (mentorRequired.some(val => !val || (typeof val === 'string' && val.trim() === ''))) {
+                    return showMessage('error', 'Please fill all mentor professional details');
+                }
+
+                if (!profileForm.degreeFiles || profileForm.degreeFiles.length === 0) {
+                    return showMessage('error', 'Please upload at least one degree document');
+                }
+
                 await saveInstructorMentorProfile({
                     name: profileForm.name,
                     email: profileForm.email,
                     qualification: profileForm.qualification,
                     specializedCourses: profileForm.specializedCourses,
                     skillLevel: profileForm.skillLevel,
-                    tags: profileForm.tags,
+                    tags: [], // Tags removed as requested
                     description: profileForm.bio,
                     profilePicture: profileForm.avatar,
                     degreeFiles: profileForm.degreeFiles,
@@ -314,6 +330,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                         <input 
                                             value={profileForm.name} 
                                             onChange={e => setProfileForm({...profileForm, name: e.target.value})}
+                                            required
                                             className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                         />
                                     </div>
@@ -322,14 +339,16 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                         <input 
                                             value={profileForm.email} 
                                             onChange={e => setProfileForm({...profileForm, email: e.target.value})}
+                                            required
                                             className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Grade / Year</label>
+                                        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Grade</label>
                                         <input 
                                             value={profileForm.grade} 
                                             onChange={e => setProfileForm({...profileForm, grade: e.target.value})}
+                                            required
                                             className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                         />
                                     </div>
@@ -338,6 +357,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                         <input 
                                             value={profileForm.field} 
                                             onChange={e => setProfileForm({...profileForm, field: e.target.value})}
+                                            required
                                             className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                         />
                                     </div>
@@ -349,6 +369,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                         rows="4" 
                                         value={profileForm.bio} 
                                         onChange={e => setProfileForm({...profileForm, bio: e.target.value})}
+                                        required
                                         className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm resize-none"
                                         placeholder={user?.role === 'teacher' ? "Tell students about your background..." : "Write a short bio..."}
                                     />
@@ -364,6 +385,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                                     <input 
                                                         value={profileForm.qualification} 
                                                         onChange={e => setProfileForm({...profileForm, qualification: e.target.value})}
+                                                        required
                                                         className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                                         placeholder="e.g. MS in Computer Science"
                                                     />
@@ -373,6 +395,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                                     <input 
                                                         value={profileForm.specializedCourses} 
                                                         onChange={e => setProfileForm({...profileForm, specializedCourses: e.target.value})}
+                                                        required
                                                         className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                                         placeholder="e.g. OOP, Data Structures"
                                                     />
@@ -386,6 +409,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                                             const val = e.target.value.replace(/[^0-9]/g, '');
                                                             setProfileForm({...profileForm, hourlyRate: val})
                                                         }}
+                                                        required
                                                         className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                                         placeholder="e.g. 25"
                                                     />
@@ -413,42 +437,7 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-4">
-                                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 flex items-center gap-2">
-                                                <Tags size={14} /> Expertise Tags
-                                            </label>
-                                            <div className="flex gap-2">
-                                                <input 
-                                                    value={tagInput}
-                                                    onChange={e => setTagInput(e.target.value)}
-                                                    onKeyDown={e => {
-                                                        if (e.key === 'Enter') {
-                                                            e.preventDefault();
-                                                            if (tagInput.trim() && !profileForm.tags.includes(tagInput.trim())) {
-                                                                setProfileForm({...profileForm, tags: [...profileForm.tags, tagInput.trim()]});
-                                                                setTagInput('');
-                                                            }
-                                                        }
-                                                    }}
-                                                    className="flex-1 px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
-                                                    placeholder="Type and press Enter to add tags"
-                                                />
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                                {profileForm.tags.map(tag => (
-                                                    <span key={tag} className="px-3 py-1 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-[10px] font-bold uppercase rounded-lg border border-purple-100 dark:border-purple-500/20 flex items-center gap-2 group">
-                                                        {tag}
-                                                        <button 
-                                                            type="button" 
-                                                            onClick={() => setProfileForm({...profileForm, tags: profileForm.tags.filter(t => t !== tag)})}
-                                                            className="hover:text-red-500 transition-colors"
-                                                        >
-                                                            <X size={12} />
-                                                        </button>
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        </div>
+
 
                                         <div className="space-y-4">
                                             <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 flex items-center gap-2">
