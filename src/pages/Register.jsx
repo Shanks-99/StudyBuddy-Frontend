@@ -113,10 +113,10 @@ const Register = () => {
         setIsSubmitting(true);
         try {
             await register(formData);
-            setStep(2);
-            setTimer(60);
+            navigate('/login', { state: { msg: 'Registration successful! Please log in.' } });
         } catch (err) {
             setApiError(err.response?.data?.msg || 'Registration failed');
+        } finally {
             setIsSubmitting(false);
         }
     };
