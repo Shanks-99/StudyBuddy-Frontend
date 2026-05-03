@@ -360,14 +360,13 @@ const ActiveStudyRoom = () => {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'stun:stun3.l.google.com:19302' },
         { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:stun.voiparound.com:3478' },
+        { urls: 'stun:stun.voipbuster.com:3478' },
+        { urls: 'stun:stun.voipstunt.com:3478' },
+        { urls: 'stun:stun.voxgratia.org:3478' },
         { urls: 'stun:global.stun.twilio.com:3478' },
         {
             urls: 'turn:a.relay.metered.ca:80',
-            username: 'e8dd65b92f6aee9f74073532',
-            credential: 'uiadnxBjl+gFZrMi'
-        },
-        {
-            urls: 'turn:a.relay.metered.ca:80?transport=tcp',
             username: 'e8dd65b92f6aee9f74073532',
             credential: 'uiadnxBjl+gFZrMi'
         },
@@ -752,7 +751,22 @@ const VideoPeer = ({ peer, name }) => {
             ref.current.srcObject = stream;
             attachedStreamIdRef.current = stream.id;
             setHasStream(true);
-            ref.current.play().catch(e => console.warn('[VideoPeer] play() rejected:', e.message));
+            
+            // Explicitly enable audio tracks
+            stream.getAudioTracks().forEach(track => {
+                track.enabled = true;
+                console.log(`[VideoPeer] Audio track enabled for ${name}: ${track.id}`);
+            });
+
+            ref.current.play().catch(e => {
+                console.warn('[VideoPeer] Playback failed/blocked. User interaction might be required.', e.message);
+                // Attempt play on click if blocked
+                const handlePlayOnClick = () => {
+                    ref.current.play();
+                    window.removeEventListener('click', handlePlayOnClick);
+                };
+                window.addEventListener('click', handlePlayOnClick);
+            });
 
             if (retryTimer) {
                 clearInterval(retryTimer);
