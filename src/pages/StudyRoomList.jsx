@@ -38,12 +38,18 @@ const StudyRoomList = () => {
         e.preventDefault();
         if (!newRoomName.trim() || !user) return;
 
+        const userId = user.id || user._id;
+        if (!userId) {
+            alert('Please log in again (missing user id).');
+            return;
+        }
+
         setIsCreating(true);
         try {
             const newRoom = await createStudyRoom({
                 name: newRoomName,
                 description: newRoomDesc,
-                userId: user.id
+                userId
             });
             setIsModalOpen(false);
             setNewRoomName('');

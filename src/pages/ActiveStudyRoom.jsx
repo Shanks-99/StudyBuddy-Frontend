@@ -28,6 +28,7 @@ const ActiveStudyRoom = () => {
     const { roomId } = useParams();
     const navigate = useNavigate();
     const user = useMemo(() => JSON.parse(sessionStorage.getItem('user')), []);
+    const userId = user?.id || user?._id;
 
     // UI State
     const [roomDetails, setRoomDetails] = useState(null);
@@ -181,7 +182,7 @@ const ActiveStudyRoom = () => {
                 if (incomingClientId) {
                     index = prev.findIndex(m => m.clientSideId && String(m.clientSideId) === incomingClientId);
                 }
-                if (index === -1 && senderId === String(user.id)) {
+                if (index === -1 && userId && senderId === String(userId)) {
                     index = prev.findIndex(m => m.isPending && m.text === message.text);
                 }
                 if (index !== -1) {
@@ -296,7 +297,7 @@ const ActiveStudyRoom = () => {
         });
 
         function joinRoomAndProcessQueue() {
-            socketRef.current.emit("join-room", { roomId, userId: user.id, name: user.name });
+            socketRef.current.emit("join-room", { roomId, userId, name: user?.name });
             setIsLoading(false);
 
             if (pendingSignals.length > 0 && streamRef.current) {
@@ -406,6 +407,11 @@ const ActiveStudyRoom = () => {
 
         peer.on("connect", () => {
             console.log(`[WebRTC] ✅ Connected to ${userToSignal}`);
+            flushIceCandidates(userToSignal);
+        });
+
+        peer.on('connectionStateChange', (state) => {
+            console.log(`[WebRTC] Connection state for ${userToSignal}: ${state}`);
         });
 
         monitorIceState(peer, userToSignal);
@@ -437,6 +443,7 @@ const ActiveStudyRoom = () => {
 
         peer.on("connect", () => {
             console.log(`[WebRTC] ✅ Connected to ${callerID}`);
+            flushIceCandidates(callerID);
             const queue = iceCandidateQueues.current[callerID];
             if (queue && queue.length > 0) {
                 console.log(`[WebRTC] Flushing ${queue.length} ICE candidates on connect for ${callerID}`);
@@ -445,6 +452,10 @@ const ActiveStudyRoom = () => {
                 });
                 iceCandidateQueues.current[callerID] = [];
             }
+        });
+
+        peer.on('connectionStateChange', (state) => {
+            console.log(`[WebRTC] Connection state for ${callerID}: ${state}`);
         });
 
         monitorIceState(peer, callerID);
@@ -510,14 +521,19 @@ const ActiveStudyRoom = () => {
         e.preventDefault();
         if (!newMessage.trim()) return;
 
+        if (!userId) {
+            alert('Please log in again (missing user id).');
+            return;
+        }
+
         const clientSideId = `client-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         console.log(`[Chat] Sending message. ClientID: ${clientSideId}`);
         
         const optimisticMessage = {
             roomId,
             sender: {
-                _id: user.id,
-                name: user.name
+                _id: userId,
+                name: user?.name
             },
             text: newMessage,
             clientSideId,
@@ -530,8 +546,8 @@ const ActiveStudyRoom = () => {
 
         socketRef.current.emit("send-message", {
             roomId,
-            sender: user.id,
-            name: user.name, 
+            sender: userId,
+            name: user?.name, 
             text: newMessage,
             clientSideId
         });
@@ -572,7 +588,7 @@ const ActiveStudyRoom = () => {
                         <MessageSquare className="w-5 h-5" />
                     </button>
 
-                    {roomDetails?.createdBy?._id === user.id && (
+                    {roomDetails?.createdBy?._id === userId && (
                         <button
                             onClick={handleEndRoom}
                             className="hidden sm:flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 px-4 py-2 rounded-lg font-bold transition-colors border border-red-200 dark:border-red-500/20"
@@ -685,7 +701,7 @@ const ActiveStudyRoom = () => {
                             messages.map((msg, i) => {
                                 const senderId = msg.sender?._id || msg.sender;
                                 const senderName = msg.sender?.name || "Unknown";
-                                const isMe = senderId === user.id;
+                                const isMe = String(senderId) === String(userId);
 
                                 return (
                                     <div key={msg._id || msg.clientSideId || `msg-${i}`} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} ${msg.isPending ? 'opacity-70' : 'opacity-100'}`}>
@@ -731,7 +747,8 @@ const ActiveStudyRoom = () => {
 const VideoPeer = ({ peer, name }) => {
     const ref = useRef();
     const [hasStream, setHasStream] = useState(false);
-    const attachedStreamIdRef = useRef(null);
+    const attachedSignatureRef = useRef(null);
+    const fallbackStreamRef = useRef(new MediaStream());
 
     useEffect(() => {
         if (!peer || peer.destroyed) return;
@@ -745,11 +762,12 @@ const VideoPeer = ({ peer, name }) => {
             const hasLiveTrack = tracks.some(t => t.readyState === 'live');
             if (!hasLiveTrack) return;
 
-            if (attachedStreamIdRef.current === stream.id) return;
+            const signature = tracks.map(t => `${t.kind}:${t.id}:${t.readyState}`).join('|');
+            if (attachedSignatureRef.current === signature) return;
 
             console.log(`[VideoPeer] Attaching REMOTE stream for ${name}, streamId=${stream.id}, tracks=${tracks.map(t => t.kind + ':' + t.readyState).join(', ')}`);
             ref.current.srcObject = stream;
-            attachedStreamIdRef.current = stream.id;
+            attachedSignatureRef.current = signature;
             setHasStream(true);
             
             // Explicitly enable audio tracks
@@ -758,14 +776,25 @@ const VideoPeer = ({ peer, name }) => {
                 console.log(`[VideoPeer] Audio track enabled for ${name}: ${track.id}`);
             });
 
+            ref.current.muted = false;
+            ref.current.volume = 1;
+
             ref.current.play().catch(e => {
                 console.warn('[VideoPeer] Playback failed/blocked. User interaction might be required.', e.message);
-                // Attempt play on click if blocked
-                const handlePlayOnClick = () => {
-                    ref.current.play();
-                    window.removeEventListener('click', handlePlayOnClick);
+
+                const tryPlay = () => {
+                    if (!ref.current) return;
+                    ref.current.play().catch(() => {});
                 };
-                window.addEventListener('click', handlePlayOnClick);
+
+                const handler = () => {
+                    tryPlay();
+                    window.removeEventListener('pointerdown', handler);
+                    window.removeEventListener('keydown', handler);
+                };
+
+                window.addEventListener('pointerdown', handler, { once: true });
+                window.addEventListener('keydown', handler, { once: true });
             });
 
             if (retryTimer) {
@@ -780,6 +809,22 @@ const VideoPeer = ({ peer, name }) => {
                 attachRemoteStream(existingRemote);
                 return true;
             }
+
+            const pc = peer._pc;
+            if (pc && typeof pc.getReceivers === 'function') {
+                const receiverTracks = pc.getReceivers().map(r => r.track).filter(Boolean);
+                if (receiverTracks.length > 0) {
+                    receiverTracks.forEach(t => {
+                        const exists = fallbackStreamRef.current.getTracks().some(et => et.id === t.id);
+                        if (!exists) fallbackStreamRef.current.addTrack(t);
+                    });
+                    if (fallbackStreamRef.current.getTracks().length > 0) {
+                        attachRemoteStream(fallbackStreamRef.current);
+                        return true;
+                    }
+                }
+            }
+
             return false;
         }
 
@@ -797,7 +842,16 @@ const VideoPeer = ({ peer, name }) => {
 
         const onStream = (stream) => attachRemoteStream(stream);
         const onTrack = (_track, stream) => {
-            if (stream) attachRemoteStream(stream);
+            if (stream) {
+                attachRemoteStream(stream);
+                return;
+            }
+
+            if (_track) {
+                const exists = fallbackStreamRef.current.getTracks().some(t => t.id === _track.id);
+                if (!exists) fallbackStreamRef.current.addTrack(_track);
+                attachRemoteStream(fallbackStreamRef.current);
+            }
         };
 
         peer.on("stream", onStream);
@@ -806,6 +860,13 @@ const VideoPeer = ({ peer, name }) => {
         const pcOnTrack = (event) => {
             if (event.streams && event.streams[0]) {
                 attachRemoteStream(event.streams[0]);
+                return;
+            }
+
+            if (event.track) {
+                const exists = fallbackStreamRef.current.getTracks().some(t => t.id === event.track.id);
+                if (!exists) fallbackStreamRef.current.addTrack(event.track);
+                attachRemoteStream(fallbackStreamRef.current);
             }
         };
         if (peer._pc) {
@@ -819,7 +880,7 @@ const VideoPeer = ({ peer, name }) => {
             if (peer._pc) {
                 peer._pc.removeEventListener('track', pcOnTrack);
             }
-            attachedStreamIdRef.current = null;
+            attachedSignatureRef.current = null;
         };
     }, [peer, name]);
 

@@ -73,7 +73,22 @@ export const getProfile = async () => {
 export const updateProfile = async (profileData) => {
     const response = await api.put("/auth/profile", profileData);
     if (response.data.user) {
-        sessionStorage.setItem("user", JSON.stringify(response.data.user));
+        // Preserve the previously stored shape (especially `id`) because many pages
+        // rely on `user.id` rather than Mongo's `_id`.
+        let existingUser = null;
+        try {
+            existingUser = JSON.parse(sessionStorage.getItem('user'));
+        } catch (e) {
+            existingUser = null;
+        }
+
+        const mergedUser = {
+            ...(existingUser || {}),
+            ...response.data.user,
+            id: (existingUser && existingUser.id) || response.data.user.id || response.data.user._id
+        };
+
+        sessionStorage.setItem("user", JSON.stringify(mergedUser));
     }
     return response.data;
 };
