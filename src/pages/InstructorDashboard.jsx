@@ -45,6 +45,7 @@ import {
 } from '../services/mentorSessionService';
 
 import SettingsView from '../components/SettingsView';
+import ResourceHub from '../components/ResourceHub';
 
 const InstructorDashboard = () => {
     const navigate = useNavigate();
@@ -266,24 +267,25 @@ const InstructorDashboard = () => {
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                         <SettingsView isDark={isDark} setIsDark={toggleTheme} onProfileUpdate={fetchProfileStatus} />
                     </div>
-                ) : ['students', 'community', 'resources'].includes(activeTab) ? (
+                ) : activeTab === 'resources' ? (
+                    <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                        <ResourceHub isDark={isDark} />
+                    </div>
+                ) : ['students', 'community'].includes(activeTab) ? (
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                         <div className="max-w-7xl mx-auto">
                             <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 rounded-3xl p-12 text-center shadow-xl">
                                 <div className="w-20 h-20 bg-purple-100 dark:bg-[#8c30e8]/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
                                     {activeTab === 'students' && <Users className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
                                     {activeTab === 'community' && <MessageSquare className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
-                                    {activeTab === 'resources' && <BookOpen className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
                                 </div>
                                 <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
                                     {activeTab === 'students' && 'My Students Module'}
                                     {activeTab === 'community' && 'Community Module'}
-                                    {activeTab === 'resources' && 'Resource Hub Module'}
                                 </h2>
                                 <p className="text-slate-500 dark:text-gray-400 max-w-md mx-auto mb-8">
                                     {activeTab === 'students' && 'Soon you will be able to manage your students, track their progress, and send direct messages.'}
                                     {activeTab === 'community' && 'The community module is coming soon! You will be able to interact with other mentors and students.'}
-                                    {activeTab === 'resources' && 'We are building a centralized hub for all your teaching materials and study guides.'}
                                 </p>
                                 <button 
                                     onClick={() => handleTabChange('dashboard')}

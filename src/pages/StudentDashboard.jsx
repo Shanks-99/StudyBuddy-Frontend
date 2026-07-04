@@ -11,6 +11,7 @@ import {
 } from '../services/mentorSessionService';
 import Sidebar from '../components/Sidebar';
 import SettingsView from '../components/SettingsView';
+import ResourceHub from '../components/ResourceHub';
 import {
     FileText,
     MessageSquare,
@@ -213,33 +214,9 @@ const StudentDashboard = () => {
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                         <SettingsView isDark={isDark} setIsDark={toggleTheme} />
                     </div>
-                ) : ['studybuddy', 'community', 'resources'].includes(activeTab) ? (
+                ) : ['resources'].includes(activeTab) ? (
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                        <div className="max-w-7xl mx-auto">
-                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 rounded-3xl p-12 text-center shadow-xl">
-                                <div className="w-20 h-20 bg-purple-100 dark:bg-[#8c30e8]/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    {activeTab === 'studybuddy' && <UserPlus className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
-                                    {activeTab === 'community' && <MessageSquare className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
-                                    {activeTab === 'resources' && <BookOpen className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
-                                </div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-                                    {activeTab === 'studybuddy' && 'Study with Buddy'}
-                                    {activeTab === 'community' && 'Community Module'}
-                                    {activeTab === 'resources' && 'Resource Hub Module'}
-                                </h2>
-                                <p className="text-slate-500 dark:text-gray-400 max-w-md mx-auto mb-8">
-                                    {activeTab === 'studybuddy' && 'Find your perfect study partner! This feature is currently in development and will allow you to match with peers based on your subjects.'}
-                                    {activeTab === 'community' && 'The student community is coming soon! A place to ask questions, share notes, and grow together.'}
-                                    {activeTab === 'resources' && 'Access a curated library of study guides, past papers, and learning materials, all in one place.'}
-                                </p>
-                                <button 
-                                    onClick={() => handleTabChange('dashboard')}
-                                    className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-600/20 transition-all"
-                                >
-                                    Back to Dashboard
-                                </button>
-                            </div>
-                        </div>
+                        <ResourceHub isDark={isDark} />
                     </div>
                 ) : (
                     <>

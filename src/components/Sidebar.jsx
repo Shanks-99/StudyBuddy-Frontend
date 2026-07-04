@@ -27,8 +27,8 @@ const Sidebar = ({ activeTab, onTabChange }) => {
         { id: 'mentorship', icon: Users, label: 'Mentorship System', route: '/mentorship' },
         { id: 'studyroom', icon: Video, label: 'Study Room', route: '/studyroom' },
         { id: 'focusrooms', icon: Headphones, label: 'Focus Rooms', route: '/focusrooms' },
-        { id: 'studybuddy', icon: UserPlus, label: 'Study with Buddy' },
-        { id: 'community', icon: MessageSquare, label: 'Community' },
+        { id: 'studybuddy', icon: UserPlus, label: 'Study with Buddy', route: '/studybuddy' },
+        { id: 'community', icon: MessageSquare, label: 'Community', route: '/community' },
         { id: 'resources', icon: BookOpen, label: 'Resource Hub' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];

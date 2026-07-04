@@ -28,7 +28,7 @@ const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
         { id: 'students', icon: Users, label: 'My Students' },
         { id: 'quiz-generator', icon: FileText, label: 'Quiz Generator', route: '/quiz-generator' },
         { id: 'mentorship', icon: Sparkles, label: 'Mentorship', route: '/instructor-mentorship' },
-        { id: 'community', icon: MessageSquare, label: 'Community' },
+        { id: 'community', icon: MessageSquare, label: 'Community', route: '/community' },
         { id: 'resources', icon: BookOpen, label: 'Resource Hub' },
         { id: 'settings', icon: Settings, label: 'Settings' },
     ];

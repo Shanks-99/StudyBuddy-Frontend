@@ -13,10 +13,13 @@ import QuizGenerator from './pages/QuizGenerator';
 import FocusRoom from './pages/FocusRoom';
 import StudyRoomList from './pages/StudyRoomList';
 import ActiveStudyRoom from './pages/ActiveStudyRoom';
+import StudyBuddyLobby from './pages/StudyBuddyLobby';
+import ActiveStudyBuddy from './pages/ActiveStudyBuddy';
 import Mentorship from './pages/Mentorship';
 import InstructorMentorship from './pages/InstructorMentorship';
 import MentorshipCall from './pages/MentorshipCall';
 import AdminDashboard from './pages/AdminDashboard';
+import Community from './pages/Community';
 
 function App() {
   const [isDark, setIsDark] = useState(() => {
@@ -40,7 +43,7 @@ function App() {
       <GlobalNavbar isDark={isDark} setIsDark={setIsDark} />
       <Routes>
         <Route path="/" element={<LandingPage />} />
-        <Route path="/studybuddy" element={<LandingPage />} />
+        <Route path="/studybuddy" element={<StudyBuddyLobby />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -54,6 +57,8 @@ function App() {
         <Route path="/mentorship-call/:callId" element={<MentorshipCall />} />
         <Route path="/studyroom" element={<StudyRoomList />} />
         <Route path="/studyroom/:roomId" element={<ActiveStudyRoom />} />
+        <Route path="/studybuddy/:roomId" element={<ActiveStudyBuddy />} />
+        <Route path="/community" element={<Community />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
