@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Ban, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getAllStudents, toggleUserBan, deleteUser } from '../../services/adminService';
+import Toast from '../ui/Toast';
+import ConfirmModal from '../ui/ConfirmModal';
 
 const AdminStudents = () => {
     const [students, setStudents] = useState([]);
@@ -9,13 +11,18 @@ const AdminStudents = () => {
     const [total, setTotal] = useState(0);
     const [pages, setPages] = useState(1);
     const [loading, setLoading] = useState(true);
+    const [toast, setToast] = useState({ message: null, type: 'success' });
+    const [confirm, setConfirm] = useState({ isOpen: false, message: '', onConfirm: null });
 
     const load = async (p = 1, q = '') => {
         setLoading(true);
         try {
             const res = await getAllStudents({ page: p, search: q });
             setStudents(res.students); setTotal(res.total); setPages(res.pages); setPage(res.page);
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error(e);
+            setToast({ message: 'Failed to fetch students', type: 'error' });
+        }
         finally { setLoading(false); }
     };
 
@@ -24,13 +31,37 @@ const AdminStudents = () => {
     const handleSearch = (e) => { e.preventDefault(); load(1, search); };
 
     const handleBan = async (id) => {
-        if (!window.confirm('Toggle ban status for this user?')) return;
-        try { await toggleUserBan(id); load(page, search); } catch (e) { alert(e.response?.data?.msg || 'Failed'); }
+        setConfirm({
+            isOpen: true,
+            message: 'Are you sure you want to toggle the ban status for this student?',
+            onConfirm: async () => {
+                setConfirm(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await toggleUserBan(id);
+                    setToast({ message: 'Ban status updated successfully', type: 'success' });
+                    load(page, search);
+                } catch (e) {
+                    setToast({ message: e.response?.data?.msg || 'Failed to update ban status', type: 'error' });
+                }
+            }
+        });
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('Permanently delete this user? This cannot be undone.')) return;
-        try { await deleteUser(id); load(page, search); } catch (e) { alert(e.response?.data?.msg || 'Failed'); }
+        setConfirm({
+            isOpen: true,
+            message: 'Are you sure you want to permanently delete this student account? This action cannot be undone.',
+            onConfirm: async () => {
+                setConfirm(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await deleteUser(id);
+                    setToast({ message: 'User deleted successfully', type: 'success' });
+                    load(page, search);
+                } catch (e) {
+                    setToast({ message: e.response?.data?.msg || 'Failed to delete user', type: 'error' });
+                }
+            }
+        });
     };
 
     return (
@@ -72,6 +103,14 @@ const AdminStudents = () => {
                     </div>}
                 </div>
             )}
+
+            <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: null, type: 'success' })} />
+            <ConfirmModal 
+                isOpen={confirm.isOpen} 
+                message={confirm.message} 
+                onConfirm={confirm.onConfirm} 
+                onCancel={() => setConfirm({ isOpen: false, message: '', onConfirm: null })} 
+            />
         </div>
     );
 };

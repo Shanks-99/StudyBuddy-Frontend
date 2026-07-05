@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentUser } from '../services/authService';
 import Sidebar from '../components/Sidebar';
+import { useToast } from '../context/ToastContext';
 import {
     Search,
     SlidersHorizontal,
@@ -89,6 +90,7 @@ const dayLabelMap = {
 
 const Mentorship = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const currentUser = getCurrentUser();
     const userId = currentUser?.id || currentUser?._id || '';
     const [query, setQuery] = useState('');
@@ -354,18 +356,18 @@ const Mentorship = () => {
                 message: `Instant session request for ${mentor.category}`,
             });
 
-            alert(`Instant request sent to ${mentor.name} for ${nowContext.currentSlot}.`);
+            showToast(`Instant request sent to ${mentor.name} for ${nowContext.currentSlot}.`, 'success');
             await refreshInstantAvailableMentors();
             setSessionVersion((prev) => prev + 1);
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to send instant request.');
+            showToast(error?.response?.data?.msg || 'Failed to send instant request.', 'error');
         }
     };
 
     const handleJoinSession = (session) => {
         const callRoomId = getMentorshipCallRoomId(session);
         if (!callRoomId) {
-            alert('Unable to join this session right now.');
+            showToast('Unable to join this session right now.', 'error');
             return;
         }
 
@@ -379,7 +381,7 @@ const Mentorship = () => {
         const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
         const selectedDateObj = new Date(viewYear, viewMonthIndex, selectedDate);
         if (selectedDateObj < todayStart) {
-            alert('Past dates cannot be booked. Please select today or a future date.');
+            showToast('Past dates cannot be booked. Please select today or a future date.', 'error');
             return;
         }
 
@@ -393,18 +395,18 @@ const Mentorship = () => {
                 message: `Session request for ${bookingMentor.category}`,
             });
 
-            alert(`Session request sent to ${bookingMentor.name}.`);
+            showToast(`Session request sent to ${bookingMentor.name}.`, 'success');
             closeBookingModal();
             setSessionVersion((prev) => prev + 1);
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to create session request.');
+            showToast(error?.response?.data?.msg || 'Failed to create session request.', 'error');
         }
     };
 
     // ── Group Session Handlers ──
     const handleSubmitGroupRequest = async () => {
         if (!bookingMentor || !groupTopic || !groupDescription || !groupDate || !groupTime) {
-            alert('Please fill in all required fields.');
+            showToast('Please fill in all required fields.', 'error');
             return;
         }
 
@@ -419,11 +421,11 @@ const Mentorship = () => {
                 maxParticipants: groupMaxParticipants,
             });
 
-            alert(`Group session request sent to ${bookingMentor.name}!`);
+            showToast(`Group session request sent to ${bookingMentor.name}!`, 'success');
             closeBookingModal();
             setGroupSessionVersion((prev) => prev + 1);
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to submit group session request.');
+            showToast(error?.response?.data?.msg || 'Failed to submit group session request.', 'error');
         }
     };
 
@@ -435,20 +437,20 @@ const Mentorship = () => {
             } else {
                 await markPaymentSent(sessionId);
             }
-            alert('Payment marked as sent! The mentor will verify it shortly.');
+            showToast('Payment marked as sent! The mentor will verify it shortly.', 'success');
             setGroupSessionVersion((prev) => prev + 1);
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to mark payment as sent.');
+            showToast(error?.response?.data?.msg || 'Failed to mark payment as sent.', 'error');
         }
     };
 
     const handleMark11PaymentSent = async (sessionId) => {
         try {
             await markSessionPaymentSent(sessionId);
-            alert('Payment marked as sent! The mentor will verify it shortly.');
+            showToast('Payment marked as sent! The mentor will verify it shortly.', 'success');
             setSessionVersion((prev) => prev + 1);
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to mark payment as sent.');
+            showToast(error?.response?.data?.msg || 'Failed to mark payment as sent.', 'error');
         }
     };
 
@@ -1430,13 +1432,28 @@ const Mentorship = () => {
                             <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4">
                                 <h4 className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-2">💳 Payment Instructions</h4>
                                 <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed mb-3">
-                                    Please send Rs. {payingSession.rate} via one of the following external accounts:
+                                    Please send Rs. {payingSession.rate} via one of the following mentor accounts:
                                 </p>
-                                <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1 font-medium pl-1 list-disc list-inside">
-                                    <li>JazzCash: 0300-1234567</li>
-                                    <li>Easypaisa: 0312-7654321</li>
-                                    <li>HBL Bank: PK70 HABB 0012 3456 7890</li>
-                                </ul>
+                                {payingSession.session.mentorProfile && (payingSession.session.mentorProfile.bankAccountNumber || payingSession.session.mentorProfile.easypaisaNumber) ? (
+                                    <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1.5 font-bold pl-1 list-none">
+                                        {payingSession.session.mentorProfile.bankAccountNumber && (
+                                            <li className="flex flex-col gap-0.5">
+                                                <span className="text-[10px] uppercase text-slate-400 font-bold">Bank Account</span>
+                                                <span className="font-mono text-sm">{payingSession.session.mentorProfile.bankAccountNumber}</span>
+                                            </li>
+                                        )}
+                                        {payingSession.session.mentorProfile.easypaisaNumber && (
+                                            <li className="flex flex-col gap-0.5 mt-2">
+                                                <span className="text-[10px] uppercase text-slate-400 font-bold">Easypaisa</span>
+                                                <span className="font-mono text-sm">{payingSession.session.mentorProfile.easypaisaNumber}</span>
+                                            </li>
+                                        )}
+                                    </ul>
+                                ) : (
+                                    <div className="text-xs text-amber-800 dark:text-amber-400 font-semibold italic bg-amber-100/50 dark:bg-amber-500/5 p-3 rounded-xl border border-amber-200/50">
+                                        No specific payment accounts are listed by the mentor. Please ask them directly in the chat or contact admin support.
+                                    </div>
+                                )}
                             </div>
 
                             <button

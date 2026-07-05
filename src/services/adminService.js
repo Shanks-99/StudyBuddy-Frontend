@@ -18,6 +18,11 @@ export const getAllMentors = async (params = {}) => {
     return response.data;
 };
 
+export const getMentorProfile = async (profileId) => {
+    const response = await api.get(`/admin/mentors/${profileId}/profile`);
+    return response.data;
+};
+
 // Approvals
 export const getPendingApprovals = async () => {
     const response = await api.get('/admin/approvals');

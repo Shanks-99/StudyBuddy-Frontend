@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getCurrentUser } from '../services/authService';
+import { useToast } from '../context/ToastContext';
 import { getFocusSessions } from '../services/focusService';
 import {
     getUpcomingSessionsForStudent,
@@ -40,6 +41,7 @@ import {
 } from '../services/groupSessionService';
 import { getCommunityPosts } from '../services/communityService';
 import { getResources, trackResourceDownload } from '../services/resourceService';
+import { getTasks as getStudentTasks, toggleTaskStatus as toggleStudentTask } from '../services/taskService';
 
 const fadeIn = {
     initial: { opacity: 0, y: 10 },
@@ -50,6 +52,7 @@ const fadeIn = {
 const StudentDashboard = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { showToast } = useToast();
 
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -102,6 +105,7 @@ const StudentDashboard = () => {
     ]);
     const [newTodo, setNewTodo] = useState('');
     const [showAddTodo, setShowAddTodo] = useState(false);
+    const [expandedTaskId, setExpandedTaskId] = useState(null);
 
     useEffect(() => {
         const currentUser = getCurrentUser();
@@ -127,18 +131,36 @@ const StudentDashboard = () => {
     const fetchDashboardData = async (userId) => {
         setLoading(true);
         try {
-            const [sessions, focus, groups, postsData, resourcesData] = await Promise.all([
+            const [sessions, focus, groups, postsData, resourcesData, dbTasks] = await Promise.all([
                 getUpcomingSessionsForStudent(),
                 getFocusSessions(userId),
                 getGroupSessionsForStudent(),
                 getCommunityPosts('latest', 'all', 1, ''),
-                getResources()
+                getResources(),
+                getStudentTasks()
             ]);
             setUpcomingSessions(sessions || []);
             setFocusSessions(focus || []);
             setGroupSessions(groups || []);
             setCommunityPosts(postsData?.posts ? postsData.posts.slice(0, 3) : []);
             setRecentResources(resourcesData ? resourcesData.slice(0, 3) : []);
+
+            // Map database tasks
+            const mappedDbTasks = (dbTasks || []).map(t => ({
+                id: t._id,
+                task: t.title,
+                done: t.status === 'completed',
+                isAssigned: true,
+                mentorName: t.mentorName,
+                description: t.description
+            }));
+
+            setTodoItems([
+                ...mappedDbTasks,
+                { id: 1, task: "Review Data Structures lecture notes", done: false },
+                { id: 2, task: "Complete OOP assignment 3", done: true },
+                { id: 3, task: "Prepare for upcoming Database midterms", done: false }
+            ]);
         } catch (error) {
             console.error("Error fetching dashboard data:", error);
         } finally {
@@ -172,10 +194,22 @@ const StudentDashboard = () => {
             .sort((a, b) => a.startTime - b.startTime);
     }, [upcomingSessions, groupSessions]);
 
-    const handleToggleTodo = (id) => {
-        setTodoItems(prev => prev.map(item =>
-            item.id === id ? { ...item, done: !item.done } : item
-        ));
+    const handleToggleTodo = async (id) => {
+        const item = todoItems.find(t => t.id === id);
+        if (item && item.isAssigned) {
+            try {
+                await toggleStudentTask(id);
+                setTodoItems(prev => prev.map(t =>
+                    t.id === id ? { ...t, done: !t.done } : t
+                ));
+            } catch (err) {
+                console.error("Failed to toggle assigned task:", err);
+            }
+        } else {
+            setTodoItems(prev => prev.map(item =>
+                item.id === id ? { ...item, done: !item.done } : item
+            ));
+        }
     };
 
     const handleDeleteTodo = (e, id) => {
@@ -229,7 +263,7 @@ const StudentDashboard = () => {
             );
         } catch (error) {
             console.error("Download tracking failed:", error);
-            alert("Error downloading file.");
+            showToast("Error downloading file.", "error");
         }
     };
 
@@ -524,27 +558,46 @@ const StudentDashboard = () => {
                                                 todoItems.map((item) => (
                                                     <div
                                                         key={item.id}
-                                                        onClick={() => handleToggleTodo(item.id)}
-                                                        className="flex items-center gap-3 bg-slate-50 dark:bg-black/20 rounded-xl p-3 border border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/10 transition-all group cursor-pointer"
+                                                        onClick={() => setExpandedTaskId(expandedTaskId === item.id ? null : item.id)}
+                                                        className="flex flex-col gap-2 bg-slate-50 dark:bg-black/20 rounded-xl p-3 border border-slate-100 dark:border-white/5 hover:border-slate-200 dark:hover:border-white/10 transition-all group cursor-pointer"
                                                     >
-                                                        <div className="relative flex items-center justify-center shrink-0">
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={item.done}
-                                                                onChange={() => { }}
-                                                                className="w-5 h-5 rounded border-2 border-slate-300 dark:border-white/20 appearance-none cursor-pointer checked:bg-purple-600 checked:border-purple-600 dark:checked:bg-[#8c30e8] dark:checked:border-[#8c30e8] transition-colors"
-                                                            />
-                                                            {item.done && <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none" />}
+                                                        <div className="flex items-center gap-3 w-full">
+                                                            <div 
+                                                                className="relative flex items-center justify-center shrink-0"
+                                                                onClick={(e) => { e.stopPropagation(); handleToggleTodo(item.id); }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={item.done}
+                                                                    onChange={() => { }}
+                                                                    className="w-5 h-5 rounded border-2 border-slate-300 dark:border-white/20 appearance-none cursor-pointer checked:bg-purple-600 checked:border-purple-600 dark:checked:bg-[#8c30e8] dark:checked:border-[#8c30e8] transition-colors"
+                                                                />
+                                                                {item.done && <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none" />}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className={`text-sm font-semibold transition-colors ${item.done ? 'line-through text-slate-400 dark:text-gray-500' : 'text-slate-700 dark:text-gray-200 group-hover:text-purple-600 dark:group-hover:text-white'}`}>
+                                                                    {item.task}
+                                                                </div>
+                                                                {item.isAssigned && (
+                                                                    <div className="text-[9px] text-purple-600 dark:text-[#a760eb] font-bold mt-0.5 uppercase tracking-wide">
+                                                                        Assigned by {item.mentorName}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {!item.isAssigned && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteTodo(e, item.id); }}
+                                                                    className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-all"
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                        <span className={`flex-1 text-sm font-medium transition-colors ${item.done ? 'line-through text-slate-400 dark:text-gray-500' : 'text-slate-700 dark:text-gray-200 group-hover:text-purple-600 dark:group-hover:text-white'}`}>
-                                                            {item.task}
-                                                        </span>
-                                                        <button
-                                                            onClick={(e) => handleDeleteTodo(e, item.id)}
-                                                            className="p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 rounded-lg transition-all"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                                                        {expandedTaskId === item.id && (item.description || item.isAssigned) && (
+                                                            <div className="pl-8 pr-4 pb-1 border-t border-slate-100 dark:border-white/5 pt-2 text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                                                                {item.description || "No instructions provided."}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))
                                             ) : (

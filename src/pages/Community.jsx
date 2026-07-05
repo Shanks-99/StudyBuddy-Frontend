@@ -1118,13 +1118,28 @@ const Community = () => {
                                 <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4">
                                     <h4 className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-2">💳 Payment Instructions</h4>
                                     <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed mb-3">
-                                        Please send Rs. {joiningSession.rate} via one of the following external accounts:
+                                        Please send Rs. {joiningSession.rate} via one of the following mentor accounts:
                                     </p>
-                                    <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1 font-medium pl-1 list-disc list-inside">
-                                        <li>JazzCash: 0300-1234567</li>
-                                        <li>Easypaisa: 0312-7654321</li>
-                                        <li>HBL Bank: PK70 HABB 0012 3456 7890</li>
-                                    </ul>
+                                    {joiningSession.mentorProfile && (joiningSession.mentorProfile.bankAccountNumber || joiningSession.mentorProfile.easypaisaNumber) ? (
+                                        <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1.5 font-bold pl-1 list-none">
+                                            {joiningSession.mentorProfile.bankAccountNumber && (
+                                                <li className="flex flex-col gap-0.5">
+                                                    <span className="text-[10px] uppercase text-slate-400 font-bold">Bank Account</span>
+                                                    <span className="font-mono text-sm">{joiningSession.mentorProfile.bankAccountNumber}</span>
+                                                </li>
+                                            )}
+                                            {joiningSession.mentorProfile.easypaisaNumber && (
+                                                <li className="flex flex-col gap-0.5 mt-2">
+                                                    <span className="text-[10px] uppercase text-slate-400 font-bold">Easypaisa</span>
+                                                    <span className="font-mono text-sm">{joiningSession.mentorProfile.easypaisaNumber}</span>
+                                                </li>
+                                            )}
+                                        </ul>
+                                    ) : (
+                                        <div className="text-xs text-amber-800 dark:text-amber-400 font-semibold italic bg-amber-100/50 dark:bg-amber-500/5 p-3 rounded-xl border border-amber-200/50">
+                                            No specific payment accounts are listed by the mentor. Please ask them directly in the chat or contact admin support.
+                                        </div>
+                                    )}
                                 </div>
 
                                 {(() => {

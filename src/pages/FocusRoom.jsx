@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from '../components/Sidebar';
 import { Play, Pause, Square, CheckCircle2, Circle, Plus, Trash2, Clock, CalendarDays, Award, Headphones, Check, RotateCcw } from 'lucide-react';
 import { saveFocusSession, getFocusSessions } from '../services/focusService';
+import { getTasks as getStudentTasks, toggleTaskStatus as toggleStudentTask, deleteTask as deleteStudentTask } from '../services/taskService';
 
 const FocusRoom = () => {
     // --- Timer State ---
@@ -10,9 +11,9 @@ const FocusRoom = () => {
     const [isActive, setIsActive] = useState(false);
     const [mode, setMode] = useState('focus'); // 'focus' | 'break'
 
-    // --- Task State ---
     const [tasks, setTasks] = useState([]);
     const [newTask, setNewTask] = useState('');
+    const [expandedTaskId, setExpandedTaskId] = useState(null);
 
     // --- Session History State ---
     const [sessions, setSessions] = useState([]);
@@ -31,10 +32,11 @@ const FocusRoom = () => {
     const progressPercent = ((totalSeconds - timeLeft) / totalSeconds) * 100;
     const circumference = 2 * Math.PI * 46;
 
-    // Load sessions on mount
+    // Load sessions and assigned tasks on mount
     useEffect(() => {
         if (user && user.id) {
             fetchSessions();
+            fetchAssignedTasks();
         }
     }, [user?.id]);
 
@@ -44,6 +46,23 @@ const FocusRoom = () => {
             setSessions(data);
         } catch (error) {
             console.error("Failed to fetch sessions:", error);
+        }
+    };
+
+    const fetchAssignedTasks = async () => {
+        try {
+            const dbTasks = await getStudentTasks();
+            const mappedTasks = (dbTasks || []).map(t => ({
+                id: t._id,
+                text: t.title,
+                completed: t.status === 'completed',
+                isAssigned: true,
+                mentorName: t.mentorName,
+                description: t.description
+            }));
+            setTasks(mappedTasks);
+        } catch (err) {
+            console.error("Failed to load assigned tasks in FocusRoom:", err);
         }
     };
 
@@ -115,12 +134,29 @@ const FocusRoom = () => {
         setNewTask('');
     };
 
-    const toggleTask = (taskId) => {
-        setTasks(tasks.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t));
+    const toggleTask = async (taskId) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (task && task.isAssigned) {
+            try {
+                await toggleStudentTask(taskId);
+            } catch (err) {
+                console.error("Failed to toggle assigned task in FocusRoom:", err);
+            }
+        }
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: !t.completed } : t));
     };
 
-    const deleteTask = (taskId) => {
-        setTasks(tasks.filter(t => t.id !== taskId));
+    const deleteTask = async (taskId) => {
+        const task = tasks.find(t => t.id === taskId);
+        if (task && task.isAssigned) {
+            try {
+                await deleteStudentTask(taskId);
+            } catch (err) {
+                console.error("Failed to delete assigned task in FocusRoom:", err);
+                return;
+            }
+        }
+        setTasks(prev => prev.filter(t => t.id !== taskId));
     };
 
     // Calculate stats
@@ -283,24 +319,41 @@ const FocusRoom = () => {
                                     ) : (
                                         tasks.map(task => (
                                             <div key={task.id} className="group">
-                                                <div className="flex items-center gap-3 p-3 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-white/5 bg-slate-50 dark:bg-white/[0.02] hover:bg-white dark:hover:bg-white/[0.04] transition-all">
-                                                    <button 
-                                                        onClick={() => toggleTask(task.id)} 
-                                                        className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-white/20 flex items-center justify-center cursor-pointer hover:border-purple-500 dark:hover:border-[#8c30e8] transition-colors shrink-0 bg-white dark:bg-transparent"
-                                                    >
-                                                        {task.completed && <Check size={12} className="text-purple-600 dark:text-[#8c30e8] stroke-[3]" />}
-                                                    </button>
-                                                    
-                                                    <span className={`text-sm font-medium flex-1 break-words transition-colors ${task.completed ? 'text-slate-400 dark:text-gray-500 line-through' : 'text-slate-700 dark:text-gray-200 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8]'}`}>
-                                                        {task.text}
-                                                    </span>
-                                                    
+                                                <div 
+                                                    onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+                                                    className="flex flex-col gap-2 p-3 rounded-xl border border-transparent hover:border-slate-200 dark:hover:border-white/5 bg-slate-50 dark:bg-white/[0.02] hover:bg-white dark:hover:bg-white/[0.04] transition-all cursor-pointer"
+                                                >
+                                                    <div className="flex items-center gap-3 w-full">
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); toggleTask(task.id); }} 
+                                                            className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-white/20 flex items-center justify-center cursor-pointer hover:border-purple-500 dark:hover:border-[#8c30e8] transition-colors shrink-0 bg-white dark:bg-transparent"
+                                                        >
+                                                            {task.completed && <Check size={12} className="text-purple-600 dark:text-[#8c30e8] stroke-[3]" />}
+                                                        </button>
+                                                        
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className={`text-sm font-medium break-words transition-colors ${task.completed ? 'text-slate-400 dark:text-gray-500 line-through' : 'text-slate-700 dark:text-gray-200 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8]'}`}>
+                                                                {task.text}
+                                                            </div>
+                                                            {task.isAssigned && (
+                                                                <div className="text-[9px] text-purple-600 dark:text-[#a760eb] font-bold uppercase tracking-wider mt-0.5">
+                                                                    Assigned by {task.mentorName}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        
                                                     <button
-                                                        onClick={() => deleteTask(task.id)}
+                                                        onClick={(e) => { e.stopPropagation(); deleteTask(task.id); }}
                                                         className="text-slate-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all flex-shrink-0 p-1.5 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
+                                                    </div>
+                                                    {expandedTaskId === task.id && (task.description || task.isAssigned) && (
+                                                        <div className="pl-8 pr-4 pb-1 border-t border-slate-100 dark:border-white/5 pt-2 text-xs text-slate-500 dark:text-gray-400 leading-relaxed">
+                                                            {task.description || "No instructions provided."}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         ))

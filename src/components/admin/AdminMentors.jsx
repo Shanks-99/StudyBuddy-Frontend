@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Ban, Trash2, Eye, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
-import { getAllMentors, toggleUserBan, deleteUser } from '../../services/adminService';
+import { getAllMentors, toggleUserBan, deleteUser, getMentorProfile } from '../../services/adminService';
+import Toast from '../ui/Toast';
+import ConfirmModal from '../ui/ConfirmModal';
 
 const AdminMentors = () => {
     const [mentors, setMentors] = useState([]);
@@ -11,6 +13,25 @@ const AdminMentors = () => {
     const [pages, setPages] = useState(1);
     const [loading, setLoading] = useState(true);
     const [selectedMentor, setSelectedMentor] = useState(null);
+    const [loadingProfile, setLoadingProfile] = useState(false);
+    const [toast, setToast] = useState({ message: null, type: 'success' });
+    const [confirm, setConfirm] = useState({ isOpen: false, message: '', onConfirm: null });
+
+    const handleViewProfile = async (mentor) => {
+        if (!mentor.mentorProfile?._id) return;
+        setLoadingProfile(true);
+        try {
+            const res = await getMentorProfile(mentor.mentorProfile._id);
+            setSelectedMentor({
+                ...mentor,
+                mentorProfile: res.profile
+            });
+        } catch (e) {
+            setToast({ message: 'Failed to load mentor profile details', type: 'error' });
+        } finally {
+            setLoadingProfile(false);
+        }
+    };
 
     const load = async (p = 1, q = '', st = '') => {
         setLoading(true);
@@ -24,8 +45,39 @@ const AdminMentors = () => {
     useEffect(() => { load(); }, []);
 
     const handleSearch = (e) => { e.preventDefault(); load(1, search, statusFilter); };
-    const handleBan = async (id) => { if (!window.confirm('Toggle ban?')) return; try { await toggleUserBan(id); load(page, search, statusFilter); } catch (e) { alert('Failed'); } };
-    const handleDelete = async (id) => { if (!window.confirm('Delete this mentor permanently?')) return; try { await deleteUser(id); load(page, search, statusFilter); } catch (e) { alert('Failed'); } };
+    const handleBan = async (id) => {
+        setConfirm({
+            isOpen: true,
+            message: 'Are you sure you want to toggle the ban status for this mentor?',
+            onConfirm: async () => {
+                setConfirm(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await toggleUserBan(id);
+                    setToast({ message: 'Mentor ban status updated successfully', type: 'success' });
+                    load(page, search, statusFilter);
+                } catch (e) {
+                    setToast({ message: 'Failed to toggle ban status', type: 'error' });
+                }
+            }
+        });
+    };
+
+    const handleDelete = async (id) => {
+        setConfirm({
+            isOpen: true,
+            message: 'Are you sure you want to permanently delete this mentor? This action cannot be undone.',
+            onConfirm: async () => {
+                setConfirm(prev => ({ ...prev, isOpen: false }));
+                try {
+                    await deleteUser(id);
+                    setToast({ message: 'Mentor deleted successfully', type: 'success' });
+                    load(page, search, statusFilter);
+                } catch (e) {
+                    setToast({ message: 'Failed to delete mentor', type: 'error' });
+                }
+            }
+        });
+    };
 
     return (
         <div className="space-y-6">
@@ -58,7 +110,7 @@ const AdminMentors = () => {
                                         <td className="px-5 py-4"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusColors[p?.status] || 'bg-slate-100 text-slate-500'}`}>{p?.status || 'No profile'}</span></td>
                                         <td className="px-5 py-4 text-sm font-bold text-slate-900 dark:text-white">{p?.hourlyRate || 0}</td>
                                         <td className="px-5 py-4"><div className="flex gap-2">
-                                            {p && <button onClick={() => setSelectedMentor(m)} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-500" title="View Profile"><Eye size={16} /></button>}
+                                            {p && <button onClick={() => handleViewProfile(m)} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-500/10 text-blue-500" title="View Profile"><Eye size={16} /></button>}
                                             <button onClick={() => handleBan(m._id)} className="p-2 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-500" title="Toggle Ban"><Ban size={16} /></button>
                                             <button onClick={() => handleDelete(m._id)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500" title="Delete"><Trash2 size={16} /></button>
                                         </div></td>
@@ -95,7 +147,7 @@ const AdminMentors = () => {
                                                 const displayName = hasData ? file.split('|DATA|')[0] : file;
                                                 const isUrl = displayUrl.startsWith('http') || displayUrl.startsWith('data:');
                                                 return (
-                                                    <a key={idx} href={isUrl ? displayUrl : '#'} download={isUrl ? displayName : undefined} target={isUrl ? "_blank" : undefined} rel="noreferrer" onClick={(e) => { if (!isUrl) { e.preventDefault(); alert(`Document content is not available. Only the filename (${displayName}) was uploaded.`); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors truncate max-w-full">
+                                                    <a key={idx} href={isUrl ? displayUrl : '#'} download={isUrl ? displayName : undefined} target={isUrl ? "_blank" : undefined} rel="noreferrer" onClick={(e) => { if (!isUrl) { e.preventDefault(); setToast({ message: `Document content is not available. Only the filename (${displayName}) was uploaded.`, type: 'info' }); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors truncate max-w-full">
                                                         <FileText size={14} className="shrink-0" /> <span className="truncate">{hasData ? displayName : `Download Document ${idx + 1}`}</span>
                                                     </a>
                                                 );
@@ -110,8 +162,22 @@ const AdminMentors = () => {
                     </div>
                 </div>
             )}
-        </div>
-    );
-};
 
-export default AdminMentors;
+            {loadingProfile && (
+                                                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center">
+                                                    <div className="animate-spin w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full" />
+                                                </div>
+                                            )}
+
+                                            <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: null, type: 'success' })} />
+                                            <ConfirmModal 
+                                                isOpen={confirm.isOpen} 
+                                                message={confirm.message} 
+                                                onConfirm={confirm.onConfirm} 
+                                                onCancel={() => setConfirm({ isOpen: false, message: '', onConfirm: null })} 
+                                            />
+                                        </div>
+                                    );
+                                };
+                                
+                                export default AdminMentors;

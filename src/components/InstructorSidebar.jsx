@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { logout, getCurrentUser } from '../services/authService';
+import { useToast } from '../context/ToastContext';
 import {
     LayoutDashboard,
     Users,
@@ -16,6 +17,7 @@ import {
 const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const user = getCurrentUser();
 
     const getInitials = (name) => {
@@ -44,7 +46,7 @@ const InstructorSidebar = ({ activeTab, onTabChange, profileStatus }) => {
 
     const handleNavigation = (item) => {
         if (profileStatus && profileStatus !== 'approved' && item.id !== 'dashboard' && item.id !== 'settings') {
-            alert('Update your profile to get accessed to different modules of mentor');
+            showToast('Update your profile to get access to different modules of mentor', 'error');
             return;
         }
 

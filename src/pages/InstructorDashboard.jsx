@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser, logout } from '../services/authService';
+import { useToast } from '../context/ToastContext';
 import {
     Users,
     Calendar,
@@ -33,7 +34,10 @@ import {
     getInstructorMentorProfile,
     isInstructorMentorProfileComplete,
     saveInstructorMentorProfile,
+    getMentorDashboardStats,
 } from '../services/instructorMentorProfileService';
+import { getResources } from '../services/resourceService';
+import { getCommunityPosts } from '../services/communityService';
 import {
     getUpcomingSessionsForMentor,
     getSessionRequestsForMentor,
@@ -46,10 +50,12 @@ import {
 
 import SettingsView from '../components/SettingsView';
 import ResourceHub from '../components/ResourceHub';
+import MyStudents from '../components/MyStudents';
 
 const InstructorDashboard = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { showToast } = useToast();
     
     const [user, setUser] = useState(null);
     const [activeTab, setActiveTab] = useState(() => {
@@ -63,6 +69,13 @@ const InstructorDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [sessionRequests, setSessionRequests] = useState([]);
+    const [stats, setStats] = useState({
+        totalStudentsHelped: 0,
+        resourcesUploaded: 0,
+        communityAnswers: 0,
+    });
+    const [myResources, setMyResources] = useState([]);
+    const [communityPosts, setCommunityPosts] = useState([]);
     const [profileForm, setProfileForm] = useState({
         name: '',
         email: '',
@@ -85,10 +98,14 @@ const InstructorDashboard = () => {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const tab = params.get('tab') || 'dashboard';
+        if (tab === 'community') {
+            navigate('/community');
+            return;
+        }
         if (tab !== activeTab) {
             setActiveTab(tab);
         }
-    }, [location.search, activeTab]);
+    }, [location.search, activeTab, navigate]);
 
     const toggleTheme = (val) => {
         const html = document.documentElement;
@@ -120,6 +137,8 @@ const InstructorDashboard = () => {
             }
         } catch (error) {
             console.error('Failed to load mentor profile:', error);
+            setProfileStatus('missing');
+            setHasAvailability(false);
         } finally {
             setLoadingProfile(false);
         }
@@ -154,12 +173,30 @@ const InstructorDashboard = () => {
     const fetchDashboardData = async (mentorName) => {
         setLoading(true);
         try {
-            const [sessions, requests] = await Promise.all([
+            const currentUser = getCurrentUser();
+            const uploaderId = currentUser?._id;
+
+            const [sessions, requests, backendStats, resourcesData, postsData] = await Promise.all([
                 getUpcomingSessionsForMentor(mentorName),
-                getSessionRequestsForMentor(mentorName)
+                getSessionRequestsForMentor(mentorName),
+                getMentorDashboardStats().catch(err => {
+                    console.error("Failed to load dashboard stats", err);
+                    return { totalStudentsHelped: 0, resourcesUploaded: 0, communityAnswers: 0 };
+                }),
+                uploaderId ? getResources({ uploader: uploaderId }).catch(err => {
+                    console.error("Failed to load resources", err);
+                    return [];
+                }) : [],
+                getCommunityPosts("latest", "all", 1, "").catch(err => {
+                    console.error("Failed to load community posts", err);
+                    return { posts: [] };
+                })
             ]);
             setUpcomingSessions(sessions);
             setSessionRequests(requests);
+            setStats(backendStats || { totalStudentsHelped: 0, resourcesUploaded: 0, communityAnswers: 0 });
+            setMyResources(resourcesData || []);
+            setCommunityPosts(postsData?.posts || []);
         } catch (error) {
             console.error('Error fetching instructor data:', error);
         } finally {
@@ -182,21 +219,81 @@ const InstructorDashboard = () => {
     const displaySessions = allProcessedSessions.slice(0, 3);
     const displayRequests = sessionRequests.slice(0, 2);
 
+    // Weekly summary computed statistics
+    const sessionsThisWeek = useMemo(() => {
+        const now = new Date();
+        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())); // Sunday
+        const endOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 6)); // Saturday
+        return upcomingSessions.filter(s => {
+            const sTime = getSessionStartDateTime(s.dateLabel, s.timeSlot);
+            return sTime && sTime >= startOfWeek && sTime <= endOfWeek;
+        }).length;
+    }, [upcomingSessions]);
+
+    const totalHoursTaught = useMemo(() => {
+        return (upcomingSessions.filter(s => s.paymentStatus === 'verified' || s.paymentStatus === 'none').length * 1.5).toFixed(1);
+    }, [upcomingSessions]);
+
+    const studentFeedbackScore = useMemo(() => {
+        let totalRating = 0;
+        let totalReviews = 0;
+        myResources.forEach(res => {
+            if (res.reviews) {
+                res.reviews.forEach(rev => {
+                    totalRating += rev.rating || 5;
+                    totalReviews++;
+                });
+            }
+        });
+        if (totalReviews === 0) return "5.0/5.0";
+        return `${(totalRating / totalReviews).toFixed(1)}/5.0`;
+    }, [myResources]);
+
+    // Live resources list mapping
+    const uploadedResources = useMemo(() => {
+        return myResources.slice(0, 3).map(res => {
+            const dateStr = new Date(res.createdAt).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
+            return {
+                id: res._id,
+                name: res.title,
+                type: res.category || 'Document',
+                downloads: res.downloadsCount || 0,
+                date: dateStr
+            };
+        });
+    }, [myResources]);
+
+    // Live community activity mapping
+    const communityActivity = useMemo(() => {
+        return communityPosts.slice(0, 3).map(post => ({
+            id: post._id,
+            question: post.content,
+            replies: post.commentCount || 0,
+            upvotes: post.likes ? post.likes.length : 0
+        }));
+    }, [communityPosts]);
+
     const handleAcceptRequest = async (requestId) => {
         try {
             await acceptSessionRequest(requestId, user.name);
+            showToast('Request accepted successfully!', 'success');
             fetchDashboardData(user.name);
         } catch (error) {
-            alert('Failed to accept request');
+            showToast('Failed to accept request', 'error');
         }
     };
 
     const handleDeclineRequest = async (requestId) => {
         try {
             await declineSessionRequest(requestId, user.name);
+            showToast('Request declined successfully.', 'success');
             fetchDashboardData(user.name);
         } catch (error) {
-            alert('Failed to decline request');
+            showToast('Failed to decline request', 'error');
         }
     };
 
@@ -219,31 +316,46 @@ const InstructorDashboard = () => {
 
     if (!user) return null;
 
-    // Mock data - Updated with solid background colors mapping to the previous gradient themes
+    // Real data from backend and local counts
     const overviewStats = [
-        { label: 'Upcoming Sessions', value: allProcessedSessions.length.toString(), icon: Calendar, color: 'bg-pink-50 text-pink-600 dark:bg-pink-500/20 dark:text-pink-400' },
-        { label: 'Pending Requests', value: sessionRequests.length.toString(), icon: Clock, color: 'bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400' },
-        { label: 'Total Students Helped', value: '156', icon: UserCheck, color: 'bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400' },
-        { label: 'Resources Uploaded', value: '42', icon: Upload, color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400' },
-        { label: 'Community Answers', value: '89', icon: MessageSquare, color: 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8]/20 dark:text-[#8c30e8]' },
+        { 
+            label: 'Upcoming Sessions', 
+            value: allProcessedSessions.length.toString(), 
+            icon: Calendar, 
+            color: 'bg-pink-50 text-pink-600 dark:bg-pink-500/20 dark:text-pink-400',
+            onClick: () => navigate('/instructor-mentorship')
+        },
+        { 
+            label: 'Pending Requests', 
+            value: sessionRequests.length.toString(), 
+            icon: Clock, 
+            color: 'bg-amber-50 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
+            onClick: () => navigate('/instructor-mentorship')
+        },
+        { 
+            label: 'Total Students Helped', 
+            value: stats.totalStudentsHelped.toString(), 
+            icon: UserCheck, 
+            color: 'bg-blue-50 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400',
+            onClick: () => handleTabChange('students')
+        },
+        { 
+            label: 'Resources Uploaded', 
+            value: stats.resourcesUploaded.toString(), 
+            icon: Upload, 
+            color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400',
+            onClick: () => handleTabChange('resources')
+        },
+        { 
+            label: 'Community Answers', 
+            value: stats.communityAnswers.toString(), 
+            icon: MessageSquare, 
+            color: 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8]/20 dark:text-[#8c30e8]',
+            onClick: () => navigate('/community')
+        },
     ];
 
 
-    const uploadedResources = [
-        { name: 'Database Notes- Chapter 5', type: 'PDF', downloads: 45, date: '2 days ago' },
-        { name: 'AI Notes', type: 'PDF', downloads: 32, date: '1 week ago' },
-        { name: 'Calculus Practice Questions', type: 'PDF', downloads: 28, date: '3 days ago' },
-    ];
-
-    const communityActivity = [
-        { question: 'How to solve quadratic equations?', replies: 12, upvotes: 24 },
-        { question: 'What is Node.Js', replies: 8, upvotes: 15 },
-        { question: 'What is User Interface?', replies: 15, upvotes: 30 },
-    ];
-
-    const sessionsThisWeek = upcomingSessions.length;
-    const totalHoursTaught = (sessionsThisWeek * 1.5).toFixed(1);
-    const studentFeedbackScore = "4.8/5.0";
 
     return (
         <div className="flex h-screen bg-background dark:bg-[#0a0a0f] text-slate-900 dark:text-white font-sans transition-colors duration-300 overflow-hidden relative">
@@ -271,30 +383,9 @@ const InstructorDashboard = () => {
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                         <ResourceHub isDark={isDark} />
                     </div>
-                ) : ['students', 'community'].includes(activeTab) ? (
+                ) : activeTab === 'students' ? (
                     <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                        <div className="max-w-7xl mx-auto">
-                            <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 rounded-3xl p-12 text-center shadow-xl">
-                                <div className="w-20 h-20 bg-purple-100 dark:bg-[#8c30e8]/20 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                                    {activeTab === 'students' && <Users className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
-                                    {activeTab === 'community' && <MessageSquare className="w-10 h-10 text-purple-600 dark:text-[#8c30e8]" />}
-                                </div>
-                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-                                    {activeTab === 'students' && 'My Students Module'}
-                                    {activeTab === 'community' && 'Community Module'}
-                                </h2>
-                                <p className="text-slate-500 dark:text-gray-400 max-w-md mx-auto mb-8">
-                                    {activeTab === 'students' && 'Soon you will be able to manage your students, track their progress, and send direct messages.'}
-                                    {activeTab === 'community' && 'The community module is coming soon! You will be able to interact with other mentors and students.'}
-                                </p>
-                                <button 
-                                    onClick={() => handleTabChange('dashboard')}
-                                    className="px-8 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl shadow-lg shadow-purple-600/20 transition-all"
-                                >
-                                    Back to Dashboard
-                                </button>
-                            </div>
-                        </div>
+                        <MyStudents />
                     </div>
                 ) : (
                     <>
@@ -328,7 +419,11 @@ const InstructorDashboard = () => {
                                 {/* Overview Stats */}
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
                                     {overviewStats.map((stat, idx) => (
-                                        <div key={idx} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-5 hover:-translate-y-1 transition-transform">
+                                        <div 
+                                            key={idx} 
+                                            onClick={stat.onClick}
+                                            className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-md shadow-slate-200/50 dark:shadow-none rounded-2xl p-5 hover:-translate-y-1 transition-transform cursor-pointer hover:border-purple-500/50 transition-all"
+                                        >
                                             <div className="flex items-center justify-between mb-3">
                                                 <div className={`p-2.5 rounded-xl ${stat.color}`}>
                                                     <stat.icon className="w-5 h-5" />
@@ -458,15 +553,24 @@ const InstructorDashboard = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-4 flex-1">
-                                            <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 transition-colors">
+                                            <div 
+                                                onClick={() => navigate('/instructor-mentorship')}
+                                                className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 border border-blue-200 dark:border-blue-500/20 hover:bg-blue-100 transition-colors cursor-pointer hover:border-blue-500/50"
+                                            >
                                                 <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300">{sessionsThisWeek}</div>
                                                 <div className="text-xs font-bold uppercase tracking-wider text-blue-600/70 dark:text-blue-400/70 mt-1">Sessions This Week</div>
                                             </div>
-                                            <div className="bg-purple-50 dark:bg-[#8c30e8]/10 rounded-xl p-4 border border-purple-200 dark:border-[#8c30e8]/20 hover:bg-purple-100 transition-colors">
+                                            <div 
+                                                onClick={() => navigate('/instructor-mentorship')}
+                                                className="bg-purple-50 dark:bg-[#8c30e8]/10 rounded-xl p-4 border border-purple-200 dark:border-[#8c30e8]/20 hover:bg-purple-100 transition-colors cursor-pointer hover:border-purple-500/50"
+                                            >
                                                 <div className="text-2xl font-extrabold text-purple-700 dark:text-[#8c30e8]">{totalHoursTaught} hrs</div>
                                                 <div className="text-xs font-bold uppercase tracking-wider text-purple-600/70 dark:text-purple-400/70 mt-1">Total Hours Taught</div>
                                             </div>
-                                            <div className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 transition-colors">
+                                            <div 
+                                                onClick={() => handleTabChange('resources')}
+                                                className="bg-emerald-50 dark:bg-emerald-500/10 rounded-xl p-4 border border-emerald-200 dark:border-emerald-500/20 hover:bg-emerald-100 transition-colors cursor-pointer hover:border-emerald-500/50"
+                                            >
                                                 <div className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300">{studentFeedbackScore}</div>
                                                 <div className="text-xs font-bold uppercase tracking-wider text-emerald-600/70 dark:text-emerald-400/70 mt-1">Student Feedback Score</div>
                                             </div>
@@ -483,34 +587,45 @@ const InstructorDashboard = () => {
                                                 <Upload className="w-5 h-5 text-purple-600 dark:text-[#8c30e8]" />
                                             </div>
                                         </div>
-                                        <button className="w-full mb-5 py-3 bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center">
+                                        <button onClick={() => handleTabChange('resources')} className="w-full mb-5 py-3 bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white text-sm font-bold rounded-xl shadow-md transition-all flex items-center justify-center">
                                             <Plus className="w-4 h-4 inline mr-2 stroke-[3]" /> Upload New Resource
                                         </button>
                                         <div className="space-y-3">
-                                            {uploadedResources.map((resource, idx) => (
-                                                <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                    <div className="flex-1">
-                                                        <div className="text-slate-900 dark:text-white font-bold text-sm">{resource.name}</div>
-                                                        <div className="text-xs font-medium text-slate-500 dark:text-gray-400 mt-1.5">
-                                                            <span className="text-purple-600 dark:text-[#8c30e8] font-bold">{resource.type}</span> • {resource.downloads} downloads • {resource.date}
+                                            {uploadedResources.length === 0 ? (
+                                                <div className="flex flex-col items-center justify-center py-10 text-center opacity-60">
+                                                    <Upload className="w-8 h-8 mb-2 text-slate-400" />
+                                                    <p className="text-sm font-medium text-slate-500">No resources uploaded yet</p>
+                                                </div>
+                                            ) : (
+                                                uploadedResources.map((resource, idx) => (
+                                                    <div 
+                                                        key={idx} 
+                                                        onClick={() => handleTabChange('resources')}
+                                                        className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-purple-500/50"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <div className="text-slate-900 dark:text-white font-bold text-sm">{resource.name}</div>
+                                                            <div className="text-xs font-medium text-slate-500 dark:text-gray-400 mt-1.5">
+                                                                <span className="text-purple-600 dark:text-[#8c30e8] font-bold">{resource.type}</span> • {resource.downloads} downloads • {resource.date}
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2" onClick={(e) => { e.stopPropagation(); handleTabChange('resources'); }}>
+                                                            <button className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-400 rounded-lg transition-colors">
+                                                                <Eye className="w-4 h-4" />
+                                                            </button>
+                                                            <button className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 rounded-lg transition-colors">
+                                                                <Download className="w-4 h-4" />
+                                                            </button>
+                                                            <button className="p-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-600 dark:bg-yellow-500/10 dark:hover:bg-yellow-500/20 dark:text-yellow-400 rounded-lg transition-colors">
+                                                                <Edit className="w-4 h-4" />
+                                                            </button>
+                                                            <button className="p-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 rounded-lg transition-colors">
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex gap-2">
-                                                        <button className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 dark:text-blue-400 rounded-lg transition-colors">
-                                                            <Eye className="w-4 h-4" />
-                                                        </button>
-                                                        <button className="p-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 dark:text-emerald-400 rounded-lg transition-colors">
-                                                            <Download className="w-4 h-4" />
-                                                        </button>
-                                                        <button className="p-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-600 dark:bg-yellow-500/10 dark:hover:bg-yellow-500/20 dark:text-yellow-400 rounded-lg transition-colors">
-                                                            <Edit className="w-4 h-4" />
-                                                        </button>
-                                                        <button className="p-2 bg-red-50 hover:bg-red-100 text-red-600 dark:bg-red-500/10 dark:hover:bg-red-500/20 dark:text-red-400 rounded-lg transition-colors">
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ))}
+                                                ))
+                                            )}
                                         </div>
                                     </div>
 
@@ -526,23 +641,34 @@ const InstructorDashboard = () => {
                                                 </div>
                                             </div>
                                             <div className="space-y-4">
-                                                {communityActivity.map((activity, idx) => (
-                                                    <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all cursor-pointer group">
-                                                        <div className="text-slate-900 dark:text-white font-bold text-sm mb-3 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8] transition-colors leading-snug">
-                                                            {activity.question}
-                                                        </div>
-                                                        <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
-                                                            <span className="flex items-center gap-1.5">
-                                                                <MessageSquare className="w-3.5 h-3.5 text-slate-400 dark:text-gray-500" />
-                                                                {activity.replies} replies
-                                                            </span>
-                                                            <span className="flex items-center gap-1.5">
-                                                                <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
-                                                                {activity.upvotes} upvotes
-                                                            </span>
-                                                        </div>
+                                                {communityActivity.length === 0 ? (
+                                                    <div className="flex flex-col items-center justify-center py-10 text-center opacity-60">
+                                                        <MessageSquare className="w-8 h-8 mb-2 text-slate-400" />
+                                                        <p className="text-sm font-medium text-slate-500">No community posts found</p>
                                                     </div>
-                                                ))}
+                                                ) : (
+                                                    communityActivity.map((activity, idx) => (
+                                                        <div 
+                                                            key={idx} 
+                                                            onClick={() => navigate('/community')}
+                                                            className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:bg-slate-100 dark:hover:bg-white/5 transition-all cursor-pointer group hover:border-purple-500/50"
+                                                        >
+                                                            <div className="text-slate-900 dark:text-white font-bold text-sm mb-3 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8] transition-colors leading-snug truncate">
+                                                                {activity.question}
+                                                            </div>
+                                                            <div className="flex items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <MessageSquare className="w-3.5 h-3.5 text-slate-400 dark:text-gray-500" />
+                                                                    {activity.replies} replies
+                                                                </span>
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
+                                                                    {activity.upvotes} upvotes
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
                                             </div>
                                         </div>
                                     </div>

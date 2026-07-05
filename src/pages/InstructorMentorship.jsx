@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import InstructorSidebar from '../components/InstructorSidebar';
 import { getCurrentUser } from '../services/authService';
+import { useToast } from '../context/ToastContext';
 import {
     CalendarDays,
     Save,
@@ -60,6 +61,7 @@ const dayLabels = {
 
 const InstructorMentorship = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [user, setUser] = useState(null);
     const [weeklyAvailability, setWeeklyAvailability] = useState(DEFAULT_WEEKLY_AVAILABILITY);
     const [activePanel, setActivePanel] = useState('sessions');
@@ -242,8 +244,9 @@ const InstructorMentorship = () => {
         try {
             await acceptGroupRequest(sessionId);
             await refreshGroupData();
+            showToast('Group request accepted successfully!', 'success');
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to accept group request.');
+            showToast(error?.response?.data?.msg || 'Failed to accept group request.', 'error');
         }
     };
 
@@ -251,8 +254,9 @@ const InstructorMentorship = () => {
         try {
             await declineGroupRequest(sessionId);
             await refreshGroupData();
+            showToast('Group request declined.', 'success');
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to decline group request.');
+            showToast(error?.response?.data?.msg || 'Failed to decline group request.', 'error');
         }
     };
 
@@ -267,8 +271,9 @@ const InstructorMentorship = () => {
                 await verifyPayment(sessionId, studentId);
             }
             await refreshGroupData();
+            showToast('Payment verified successfully!', 'success');
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to verify payment.');
+            showToast(error?.response?.data?.msg || 'Failed to verify payment.', 'error');
         }
     };
 
@@ -283,8 +288,9 @@ const InstructorMentorship = () => {
                 await rejectPayment(sessionId, studentId);
             }
             await refreshGroupData();
+            showToast('Payment rejected.', 'success');
         } catch (error) {
-            alert(error?.response?.data?.msg || 'Failed to reject payment.');
+            showToast(error?.response?.data?.msg || 'Failed to reject payment.', 'error');
         }
     };
 
@@ -292,9 +298,9 @@ const InstructorMentorship = () => {
         try {
             await acceptJoinRequest(sessionId, studentId);
             await refreshGroupData();
-            alert("Join request accepted.");
+            showToast("Join request accepted.", 'success');
         } catch (error) {
-            alert(error?.response?.data?.msg || "Failed to accept join request.");
+            showToast(error?.response?.data?.msg || "Failed to accept join request.", 'error');
         }
     };
 
@@ -302,16 +308,16 @@ const InstructorMentorship = () => {
         try {
             await declineJoinRequest(sessionId, studentId);
             await refreshGroupData();
-            alert("Join request declined.");
+            showToast("Join request declined.", 'success');
         } catch (error) {
-            alert(error?.response?.data?.msg || "Failed to decline join request.");
+            showToast(error?.response?.data?.msg || "Failed to decline join request.", 'error');
         }
     };
 
     const handleTakeSession = (session) => {
         const callRoomId = getMentorshipCallRoomId(session);
         if (!callRoomId) {
-            alert('Unable to start this session right now.');
+            showToast('Unable to start this session right now.', 'error');
             return;
         }
 
@@ -683,9 +689,9 @@ const InstructorMentorship = () => {
                                                 try {
                                                     const saved = await saveMentorWeeklyAvailability(weeklyAvailability);
                                                     setWeeklyAvailability(saved);
-                                                    alert('Availability saved and connected to student booking.');
+                                                    showToast('Availability saved and connected to student booking.', 'success');
                                                 } catch (error) {
-                                                    alert('Failed to save availability.');
+                                                    showToast('Failed to save availability.', 'error');
                                                 }
                                             }}
                                             className="px-6 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white font-bold transition-colors shadow-md flex items-center gap-2 text-sm"

@@ -57,3 +57,13 @@ export const saveInstructorMentorProfile = async (profileInput) => {
     clearMentorProfileCache();
     return response.data?.profile || null;
 };
+
+export const getMentorDashboardStats = async () => {
+    const response = await api.get('/mentorship/mentor-stats');
+    return response.data;
+};
+
+export const getMyStudentsForMentor = async () => {
+    const response = await api.get('/mentorship/my-students');
+    return response.data;
+};

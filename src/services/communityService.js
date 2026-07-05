@@ -85,9 +85,9 @@ export const getTrendingPosts = async () => {
     }
 };
 
-export const getCommunityReports = async () => {
+export const getCommunityReports = async (params = {}) => {
     try {
-        const response = await api.get("/community/reports");
+        const response = await api.get("/community/reports", { params });
         return response.data;
     } catch (error) {
         throw error.response?.data || { message: "Failed to fetch community reports" };

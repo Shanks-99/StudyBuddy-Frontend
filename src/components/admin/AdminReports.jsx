@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Eye, XCircle, Clock, AlertOctagon, MessageSquare, Flag } from 'lucide-react';
+import { CheckCircle, Eye, XCircle, Clock, AlertOctagon, MessageSquare, Flag, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getAllReports, updateReportStatus } from '../../services/adminService';
 import { getCommunityReports, handleCommunityReport } from '../../services/communityService';
+import Toast from '../ui/Toast';
 
 const AdminReports = () => {
     const [reportTab, setReportTab] = useState('system'); // 'system' or 'community'
@@ -11,26 +12,45 @@ const AdminReports = () => {
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState(null);
     const [notes, setNotes] = useState('');
+    const [toast, setToast] = useState({ message: null, type: 'success' });
 
-    const loadSystemReports = async (st = '') => {
+    // System Reports pagination
+    const [sysPage, setSysPage] = useState(1);
+    const [sysPages, setSysPages] = useState(1);
+    const [sysTotal, setSysTotal] = useState(0);
+
+    // Community Reports pagination
+    const [commPage, setCommPage] = useState(1);
+    const [commPages, setCommPages] = useState(1);
+    const [commTotal, setCommTotal] = useState(0);
+
+    const loadSystemReports = async (p = 1, st = '') => {
         setLoading(true);
         try {
-            const res = await getAllReports({ status: st || undefined });
+            const res = await getAllReports({ page: p, status: st || undefined });
             setReports(res.reports || []);
+            setSysTotal(res.total || 0);
+            setSysPages(res.pages || 1);
+            setSysPage(res.page || 1);
         } catch (e) {
             console.error(e);
+            setToast({ message: 'Failed to load system reports', type: 'error' });
         } finally {
             setLoading(false);
         }
     };
 
-    const loadCommunityReports = async () => {
+    const loadCommunityReports = async (p = 1) => {
         setLoading(true);
         try {
-            const res = await getCommunityReports();
-            setCommunityReports(res || []);
+            const res = await getCommunityReports({ page: p });
+            setCommunityReports(res.reports || []);
+            setCommTotal(res.total || 0);
+            setCommPages(res.pages || 1);
+            setCommPage(res.page || 1);
         } catch (e) {
             console.error(e);
+            setToast({ message: 'Failed to load community reports', type: 'error' });
         } finally {
             setLoading(false);
         }
@@ -38,9 +58,9 @@ const AdminReports = () => {
 
     useEffect(() => {
         if (reportTab === 'system') {
-            loadSystemReports(statusFilter);
+            loadSystemReports(1, statusFilter);
         } else {
-            loadCommunityReports();
+            loadCommunityReports(1);
         }
     }, [reportTab, statusFilter]);
 
@@ -49,18 +69,20 @@ const AdminReports = () => {
             await updateReportStatus(reportId, { status, adminNotes: notes });
             setSelected(null);
             setNotes('');
-            loadSystemReports(statusFilter);
+            setToast({ message: `Report updated to ${status} successfully`, type: 'success' });
+            loadSystemReports(sysPage, statusFilter);
         } catch (e) {
-            alert('Failed to update report');
+            setToast({ message: 'Failed to update report', type: 'error' });
         }
     };
 
     const handleCommAction = async (reportId, action) => {
         try {
             await handleCommunityReport(reportId, action);
-            loadCommunityReports();
+            setToast({ message: `Community report action '${action}' completed`, type: 'success' });
+            loadCommunityReports(commPage);
         } catch (e) {
-            alert('Failed to process community report');
+            setToast({ message: 'Failed to process community report', type: 'error' });
         }
     };
 
@@ -124,11 +146,6 @@ const AdminReports = () => {
                         </select>
                     </div>
 
-                    {reports.length === 0 ? (
-                        <div className="rounded-2xl bg-white dark:bg-white/[0.05] border border-slate-200 dark:border-white/10 p-12 text-center">
-                            <CheckCircle size={48} className="mx-auto text-green-500 mb-4" />
-                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">No system or user reports found</h3>
-                        </div>
                     ) : (
                         <div className="space-y-4">
                             {reports.map(r => (
@@ -171,6 +188,13 @@ const AdminReports = () => {
                                     )}
                                 </div>
                             ))}
+                            {sysPages > 1 && (
+                                <div className="flex items-center justify-between px-6 py-3.5 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm">
+                                    <button onClick={() => loadSystemReports(sysPage - 1, statusFilter)} disabled={sysPage <= 1} className="text-sm text-slate-500 disabled:opacity-40 flex items-center gap-1"><ChevronLeft size={16} /> Prev</button>
+                                    <span className="text-sm text-slate-500">Page {sysPage} of {sysPages}</span>
+                                    <button onClick={() => loadSystemReports(sysPage + 1, statusFilter)} disabled={sysPage >= sysPages} className="text-sm text-slate-500 disabled:opacity-40 flex items-center gap-1">Next <ChevronRight size={16} /></button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
@@ -235,6 +259,13 @@ const AdminReports = () => {
                                     )}
                                 </div>
                             ))}
+                            {commPages > 1 && (
+                                <div className="flex items-center justify-between px-6 py-3.5 rounded-2xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 shadow-sm">
+                                    <button onClick={() => loadCommunityReports(commPage - 1)} disabled={commPage <= 1} className="text-sm text-slate-500 disabled:opacity-40 flex items-center gap-1"><ChevronLeft size={16} /> Prev</button>
+                                    <span className="text-sm text-slate-500">Page {commPage} of {commPages}</span>
+                                    <button onClick={() => loadCommunityReports(commPage + 1)} disabled={commPage >= commPages} className="text-sm text-slate-500 disabled:opacity-40 flex items-center gap-1">Next <ChevronRight size={16} /></button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </>
@@ -259,6 +290,8 @@ const AdminReports = () => {
                     </div>
                 </div>
             )}
+
+            <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: null, type: 'success' })} />
         </div>
     );
 };

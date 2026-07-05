@@ -1,18 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Eye, FileText, Tags } from 'lucide-react';
 import { getPendingApprovals, updateMentorStatus } from '../../services/adminService';
+import Toast from '../ui/Toast';
 
 const AdminApprovals = () => {
     const [profiles, setProfiles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selected, setSelected] = useState(null);
     const [notes, setNotes] = useState('');
+    const [toast, setToast] = useState({ message: null, type: 'success' });
 
     const load = async () => {
         setLoading(true);
-        try { const res = await getPendingApprovals(); setProfiles(res.profiles || []); }
-        catch (e) { console.error(e); }
-        finally { setLoading(false); }
+        try { 
+            const res = await getPendingApprovals(); 
+            setProfiles(res.profiles || []); 
+        } catch (e) { 
+            console.error(e); 
+            setToast({ message: 'Failed to fetch pending approvals', type: 'error' });
+        } finally { 
+            setLoading(false); 
+        }
     };
 
     useEffect(() => { load(); }, []);
@@ -21,8 +29,11 @@ const AdminApprovals = () => {
         try {
             await updateMentorStatus(profileId, { status, adminNotes: notes });
             setSelected(null); setNotes('');
+            setToast({ message: `Mentor status updated to ${status} successfully`, type: 'success' });
             load();
-        } catch (e) { alert(e.response?.data?.msg || 'Failed'); }
+        } catch (e) { 
+            setToast({ message: e.response?.data?.msg || 'Failed to update status', type: 'error' }); 
+        }
     };
 
     if (loading) return <div className="flex justify-center py-20"><div className="animate-spin w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full" /></div>;
@@ -84,7 +95,7 @@ const AdminApprovals = () => {
                                             const displayName = hasData ? file.split('|DATA|')[0] : file;
                                             const isUrl = displayUrl.startsWith('http') || displayUrl.startsWith('data:');
                                             return (
-                                                <a key={idx} href={isUrl ? displayUrl : '#'} download={isUrl ? displayName : undefined} target={isUrl ? "_blank" : undefined} rel="noreferrer" onClick={(e) => { if (!isUrl) { e.preventDefault(); alert(`Document content is not available. Only the filename (${displayName}) was uploaded.`); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors truncate max-w-full">
+                                                <a key={idx} href={isUrl ? displayUrl : '#'} download={isUrl ? displayName : undefined} target={isUrl ? "_blank" : undefined} rel="noreferrer" onClick={(e) => { if (!isUrl) { e.preventDefault(); setToast({ message: `Document content is not available. Only the filename (${displayName}) was uploaded.`, type: 'info' }); } }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors truncate max-w-full">
                                                     <FileText size={14} className="shrink-0" /> <span className="truncate">{hasData ? displayName : `Download Document ${idx + 1}`}</span>
                                                 </a>
                                             );
@@ -103,6 +114,8 @@ const AdminApprovals = () => {
                     </div>
                 </div>
             )}
+
+            <Toast message={toast.message} type={toast.type} onClose={() => setToast({ message: null, type: 'success' })} />
         </div>
     );
 };

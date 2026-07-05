@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import GlobalNavbar from './components/GlobalNavbar';
 import Login from './pages/Login';
+import { ToastProvider } from './context/ToastContext';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import LandingPage from './pages/LandingPage';
@@ -39,31 +40,33 @@ function App() {
   }, [isDark]);
 
   return (
-    <Router>
-      <GlobalNavbar isDark={isDark} setIsDark={setIsDark} />
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/studybuddy" element={<StudyBuddyLobby />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-        <Route path="/student-dashboard" element={<StudentDashboard />} />
-        <Route path="/instructor-dashboard" element={<InstructorDashboard />} />
-        <Route path="/content-generator" element={<ContentGenerator />} />
-        <Route path="/quiz-generator" element={<QuizGenerator />} />
-        <Route path="/focusrooms" element={<FocusRoom />} />
-        <Route path="/mentorship" element={<Mentorship />} />
-        <Route path="/instructor-mentorship" element={<InstructorMentorship />} />
-        <Route path="/mentorship-call/:callId" element={<MentorshipCall />} />
-        <Route path="/studyroom" element={<StudyRoomList />} />
-        <Route path="/studyroom/:roomId" element={<ActiveStudyRoom />} />
-        <Route path="/studybuddy/:roomId" element={<ActiveStudyBuddy />} />
-        <Route path="/community" element={<Community />} />
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+    <ToastProvider>
+      <Router>
+        <GlobalNavbar isDark={isDark} setIsDark={setIsDark} />
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/studybuddy" element={<StudyBuddyLobby />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/student-dashboard" element={<StudentDashboard />} />
+          <Route path="/instructor-dashboard" element={<InstructorDashboard />} />
+          <Route path="/content-generator" element={<ContentGenerator />} />
+          <Route path="/quiz-generator" element={<QuizGenerator />} />
+          <Route path="/focusrooms" element={<FocusRoom />} />
+          <Route path="/mentorship" element={<Mentorship />} />
+          <Route path="/instructor-mentorship" element={<InstructorMentorship />} />
+          <Route path="/mentorship-call/:callId" element={<MentorshipCall />} />
+          <Route path="/studyroom" element={<StudyRoomList />} />
+          <Route path="/studyroom/:roomId" element={<ActiveStudyRoom />} />
+          <Route path="/studybuddy/:roomId" element={<ActiveStudyBuddy />} />
+          <Route path="/community" element={<Community />} />
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </ToastProvider>
   );
 }
 

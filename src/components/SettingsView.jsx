@@ -43,7 +43,9 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
         skillLevel: 'Beginner',
         tags: [],
         degreeFiles: [],
-        hourlyRate: ''
+        hourlyRate: '',
+        bankAccountNumber: '',
+        easypaisaNumber: ''
     });
 
     const [tagInput, setTagInput] = useState('');
@@ -80,7 +82,9 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                     skillLevel: 'Beginner',
                     tags: [],
                     degreeFiles: [],
-                    hourlyRate: ''
+                    hourlyRate: '',
+                    bankAccountNumber: '',
+                    easypaisaNumber: ''
                 };
 
                 if (currentUser.role === 'teacher') {
@@ -95,7 +99,9 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                 tags: Array.isArray(mentorProfile.tags) ? mentorProfile.tags : [],
                                 degreeFiles: Array.isArray(mentorProfile.degreeFiles) ? mentorProfile.degreeFiles : [],
                                 bio: mentorProfile.description ?? currentUser.bio ?? '',
-                                hourlyRate: mentorProfile.hourlyRate ?? ''
+                                hourlyRate: mentorProfile.hourlyRate ?? '',
+                                bankAccountNumber: mentorProfile.bankAccountNumber ?? '',
+                                easypaisaNumber: mentorProfile.easypaisaNumber ?? ''
                             };
                         }
                     } catch (error) {
@@ -142,6 +148,12 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                     return showMessage('error', 'Please fill all mentor professional details');
                 }
 
+                const hasBank = profileForm.bankAccountNumber && profileForm.bankAccountNumber.trim() !== '';
+                const hasEasypaisa = profileForm.easypaisaNumber && profileForm.easypaisaNumber.trim() !== '';
+                if (!hasBank && !hasEasypaisa) {
+                    return showMessage('error', 'Please fill at least one of the payment details (Bank Account or Easypaisa)');
+                }
+
                 if (!profileForm.degreeFiles || profileForm.degreeFiles.length === 0) {
                     return showMessage('error', 'Please upload at least one degree document');
                 }
@@ -156,7 +168,9 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                     description: profileForm.bio,
                     profilePicture: profileForm.avatar,
                     degreeFiles: profileForm.degreeFiles,
-                    hourlyRate: profileForm.hourlyRate
+                    hourlyRate: profileForm.hourlyRate,
+                    bankAccountNumber: profileForm.bankAccountNumber,
+                    easypaisaNumber: profileForm.easypaisaNumber
                 });
             }
 
@@ -421,6 +435,26 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
                                                         required
                                                         className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
                                                         placeholder="e.g. 25"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Bank Account Number (Optional)</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={profileForm.bankAccountNumber} 
+                                                        onChange={e => setProfileForm({...profileForm, bankAccountNumber: e.target.value})}
+                                                        className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
+                                                        placeholder="e.g. PK70 HABB 0012 3456 7890"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400">Easypaisa Number (Optional)</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={profileForm.easypaisaNumber} 
+                                                        onChange={e => setProfileForm({...profileForm, easypaisaNumber: e.target.value})}
+                                                        className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/10 focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all dark:text-white text-sm"
+                                                        placeholder="e.g. 03127654321"
                                                     />
                                                 </div>
                                             </div>

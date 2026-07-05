@@ -37,14 +37,14 @@ const AdminDashboard = () => {
 
     const renderTab = () => {
         switch (activeTab) {
-            case 'dashboard': return <AdminOverview />;
+            case 'dashboard': return <AdminOverview onTabChange={handleTabChange} />;
             case 'students': return <AdminStudents />;
             case 'mentors': return <AdminMentors />;
             case 'approvals': return <AdminApprovals />;
             case 'reports': return <AdminReports />;
             case 'analytics': return <AdminAnalytics />;
             case 'settings': return <AdminSettings user={user} />;
-            default: return <AdminOverview />;
+            default: return <AdminOverview onTabChange={handleTabChange} />;
         }
     };
 
