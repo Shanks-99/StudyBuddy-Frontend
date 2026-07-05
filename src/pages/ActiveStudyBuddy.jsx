@@ -421,114 +421,221 @@ const ActiveStudyBuddy = () => {
         peerRef.current = peer;
     }, [destroyPeer, registerPeerStreamHandlers, tryExtractRemoteStream]);
 
-    // Socket Setup
+    // Socket Setup — All WebRTC peer logic is INLINE to avoid stale closure / re-render issues
     useEffect(() => {
         if (!user) return;
 
-        socketRef.current = io(SOCKET_SERVER_URL);
-        const currentSocket = socketRef.current;
-        let localStreamRef = null;
+        const currentSocket = io(SOCKET_SERVER_URL);
+        socketRef.current = currentSocket;
+        const streamLocal = { current: null };
+        let watcherInterval = null;
+        const fallbackStream = new MediaStream();
+        const pendingSignals = [];
+        const queuedIceSignals = {};
 
-        // Queue for signals that arrive before peer is ready
-        const pendingSignalsRef = [];
+        // --- Inline robust stream detection ---
+        function doAttach(rs) {
+            if (!rs) return;
+            const tracks = rs.getTracks();
+            if (tracks.length > 0 && !tracks.some(t => t.readyState === 'live')) return;
+            if (remoteStreamRef.current?.id === rs.id) {
+                if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+                    remoteVideoRef.current.srcObject = rs;
+                    remoteVideoRef.current.play().catch(() => {});
+                }
+                return;
+            }
+            console.log(`[WebRTC] Attaching: ${tracks.map(t => t.kind + ':' + t.readyState).join(',')}`);
+            remoteStreamRef.current = rs;
+            setIsCallActive(true);
+            rs.getAudioTracks().forEach(t => { t.enabled = true; });
+            if (remoteVideoRef.current) {
+                remoteVideoRef.current.srcObject = rs;
+                remoteVideoRef.current.muted = false;
+                remoteVideoRef.current.volume = 1;
+                remoteVideoRef.current.play().catch(() => {
+                    const r = () => { remoteVideoRef.current?.play().catch(() => {}); };
+                    window.addEventListener('pointerdown', r, { once: true });
+                    window.addEventListener('keydown', r, { once: true });
+                });
+            }
+            if (watcherInterval) { clearInterval(watcherInterval); watcherInterval = null; }
+        }
 
-        // Register ALL socket listeners FIRST (before join), to prevent race conditions
-        // where signals arrive before listeners are set up
+        function doExtract(peer) {
+            if (!peer || peer.destroyed) return false;
+            const ex = peer._remoteStreams?.[0] || peer._pc?.getRemoteStreams?.()[0];
+            if (ex) { doAttach(ex); return true; }
+            if (peer._pc?.getReceivers) {
+                const live = peer._pc.getReceivers().map(r => r.track).filter(t => t?.readyState === 'live');
+                live.forEach(t => { if (!fallbackStream.getTracks().some(e => e.id === t.id)) fallbackStream.addTrack(t); });
+                if (fallbackStream.getTracks().length > 0) { doAttach(fallbackStream); return true; }
+            }
+            return false;
+        }
 
-        // Reconcile video connections on join
+        function hookStreamDetection(peer) {
+            peer.on('stream', s => { console.log("[WebRTC] stream event"); doAttach(s); });
+            peer.on('track', (t, s) => {
+                console.log(`[WebRTC] track event: ${t.kind}`);
+                if (s) { doAttach(s); return; }
+                if (!fallbackStream.getTracks().some(e => e.id === t.id)) fallbackStream.addTrack(t);
+                doAttach(fallbackStream);
+            });
+            if (peer._pc) {
+                peer._pc.addEventListener('track', ev => {
+                    console.log(`[WebRTC] pc.ontrack: ${ev.track?.kind}`);
+                    if (ev.streams?.[0]) { doAttach(ev.streams[0]); return; }
+                    if (ev.track) {
+                        if (!fallbackStream.getTracks().some(t => t.id === ev.track.id)) fallbackStream.addTrack(ev.track);
+                        doAttach(fallbackStream);
+                    }
+                });
+            }
+            if (watcherInterval) clearInterval(watcherInterval);
+            watcherInterval = setInterval(() => {
+                if (!peer || peer.destroyed) { clearInterval(watcherInterval); watcherInterval = null; return; }
+                if (!remoteStreamRef.current) doExtract(peer);
+                else { clearInterval(watcherInterval); watcherInterval = null; }
+            }, 800);
+        }
+
+        function doDestroy() {
+            if (peerRef.current) { peerRef.current.destroy(); peerRef.current = null; }
+            if (watcherInterval) { clearInterval(watcherInterval); watcherInterval = null; }
+            setIsCallActive(false);
+            remoteStreamRef.current = null;
+            if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+        }
+
+        function doQueueIce(from, signal) {
+            if (!from || !signal || signal.type) return;
+            if (!queuedIceSignals[from]) queuedIceSignals[from] = [];
+            queuedIceSignals[from].push(signal);
+        }
+
+        function doFlushQueuedIce(from) {
+            if (!from || !peerRef.current || peerRef.current.destroyed) return;
+            const q = queuedIceSignals[from];
+            if (!Array.isArray(q) || q.length === 0) return;
+            const pc = peerRef.current._pc;
+            const hasRemoteDesc = Boolean(pc?.remoteDescription?.type);
+            if (!hasRemoteDesc) return;
+
+            const remaining = [];
+            q.forEach(ice => {
+                try {
+                    peerRef.current.signal(ice);
+                } catch(e) {
+                    remaining.push(ice);
+                }
+            });
+            queuedIceSignals[from] = remaining;
+        }
+
+        function doSignalSafely(from, signal) {
+            if (!peerRef.current || peerRef.current.destroyed || !signal) return false;
+            const isIce = !signal.type;
+            if (isIce) {
+                const pc = peerRef.current._pc;
+                const hasRemoteDesc = Boolean(pc?.remoteDescription?.type);
+                if (!hasRemoteDesc) {
+                    doQueueIce(from, signal);
+                    return false;
+                }
+            }
+            try {
+                peerRef.current.signal(signal);
+                if (signal.type === 'answer' || signal.type === 'offer') {
+                    setTimeout(() => doFlushQueuedIce(from), 100);
+                }
+                return true;
+            } catch(e) {
+                console.warn("[WebRTC] Safe signal failed:", e.message);
+                return false;
+            }
+        }
+
+        function doInitiate(targetId, stream) {
+            if (!stream) return;
+            doDestroy();
+            console.log(`[WebRTC] Initiating to ${targetId}`);
+            const p = new Peer({
+                initiator: true, trickle: true, stream,
+                config: { iceServers },
+                offerOptions: { offerToReceiveAudio: true, offerToReceiveVideo: true }
+            });
+            p.on('signal', sig => currentSocket.emit('webrtc-signal', { signal: sig, to: targetId }));
+            p.on('connect', () => { console.log("[WebRTC] Connected (init)"); setIsCallActive(true); setTimeout(() => doExtract(p), 300); });
+            p.on('error', e => { console.error("[WebRTC] Error:", e.message); doDestroy(); });
+            p.on('close', () => { console.log("[WebRTC] Closed"); doDestroy(); });
+            hookStreamDetection(p);
+            peerRef.current = p;
+        }
+
+        function doAnswer(offer, fromId, stream) {
+            if (!stream) { console.warn("[WebRTC] No local stream for answer"); return; }
+            doDestroy();
+            console.log(`[WebRTC] Answering from ${fromId}`);
+            const p = new Peer({
+                initiator: false, trickle: true, stream,
+                config: { iceServers },
+                offerOptions: { offerToReceiveAudio: true, offerToReceiveVideo: true }
+            });
+            p.on('signal', sig => currentSocket.emit('webrtc-signal', { signal: sig, to: fromId }));
+            p.on('connect', () => { console.log("[WebRTC] Connected (answer)"); setIsCallActive(true); setTimeout(() => doExtract(p), 300); });
+            p.on('error', e => { console.error("[WebRTC] Error:", e.message); doDestroy(); });
+            p.on('close', () => { console.log("[WebRTC] Closed"); doDestroy(); });
+            hookStreamDetection(p);
+            p.signal(offer);
+            peerRef.current = p;
+        }
+
+        // --- Socket listeners (registered before media/join) ---
+
         currentSocket.on("buddy-room-users", (users) => {
             setParticipants(users);
-            const socketId = currentSocket.id;
-            
-            // If there's another user in the room, and I am the host (mySocketId < otherSocketId), initiate WebRTC
-            const other = users.find(u => u.socketId !== socketId);
-            if (other && socketId < other.socketId && localStreamRef) {
-                initiateCall(other.socketId, localStreamRef);
-                // Flush any queued signals for this peer
-                const toFlush = pendingSignalsRef.filter(p => p.from === other.socketId);
-                toFlush.forEach(p => {
-                    if (peerRef.current) {
-                        try {
-                            peerRef.current.signal(p.signal);
-                        } catch (e) {
-                            console.warn("[WebRTC] Error flushing queued signal:", e.message);
-                        }
-                    }
-                });
-                pendingSignalsRef.length = 0;
+            const myId = currentSocket.id;
+            const other = users.find(u => u.socketId !== myId);
+            if (other && myId < other.socketId && streamLocal.current) {
+                if (peerRef.current && !peerRef.current.destroyed) return; // guard
+                doInitiate(other.socketId, streamLocal.current);
+                
+                // Flush pending signals
+                const toFlush = pendingSignals.filter(s => s.from === other.socketId);
+                toFlush.forEach(s => doSignalSafely(other.socketId, s.signal));
+                
+                // Filter out of pending
+                const remainingPending = pendingSignals.filter(s => s.from !== other.socketId);
+                pendingSignals.length = 0;
+                pendingSignals.push(...remainingPending);
             }
         });
 
-        // Handle incoming WebRTC signals
         currentSocket.on("webrtc-signal", ({ signal, from }) => {
-            console.log(`[WebRTC] Received signal of type=${signal.type || 'ice'} from socket ${from}`);
+            console.log(`[WebRTC] Signal: type=${signal.type || 'ice'} from=${from}`);
             if (signal.type === 'offer') {
-                answerCall(signal, from, localStreamRef);
-                // Flush any queued ICE candidates for this peer
-                const toFlush = pendingSignalsRef.filter(p => p.from === from && !p.signal.type);
-                toFlush.forEach(p => {
-                    if (peerRef.current) {
-                        try {
-                            peerRef.current.signal(p.signal);
-                        } catch (e) {
-                            console.warn("[WebRTC] Error flushing queued ICE:", e.message);
-                        }
-                    }
-                });
-                pendingSignalsRef.length = 0;
-            } else if (peerRef.current) {
-                try {
-                    peerRef.current.signal(signal);
-                } catch (e) {
-                    console.warn("[WebRTC] Error signaling peer:", e.message);
-                }
+                doAnswer(signal, from, streamLocal.current);
+                
+                // Flush pending signals (especially ICE candidates)
+                const toFlush = pendingSignals.filter(s => s.from === from);
+                toFlush.forEach(s => doSignalSafely(from, s.signal));
+                
+                const remainingPending = pendingSignals.filter(s => s.from !== from);
+                pendingSignals.length = 0;
+                pendingSignals.push(...remainingPending);
+            } else if (!peerRef.current || peerRef.current.destroyed) {
+                pendingSignals.push({ from, signal });
             } else {
-                // Queue signals that arrive before the peer is created
-                console.log(`[WebRTC] Peer not ready, queuing signal from ${from}`);
-                pendingSignalsRef.push({ from, signal });
+                doSignalSafely(from, signal);
+                doFlushQueuedIce(from);
             }
         });
 
-        // Initialize Media Devices, then join room
-        const initMedia = async () => {
-            let userMediaStream = null;
-            try {
-                // Request camera and microphone access
-                userMediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                setStream(userMediaStream);
-                localStreamRef = userMediaStream;
-                if (localVideoRef.current) {
-                    localVideoRef.current.srcObject = userMediaStream;
-                }
-            } catch (err) {
-                console.warn("[Media] Camera/mic access denied, entering call in listen-only or blank mode", err);
-            }
+        currentSocket.on("buddy-user-joined", (u) => console.log("[Socket] Partner joined:", u.name));
+        currentSocket.on("buddy-user-left", () => { console.log("[Socket] Partner left"); doDestroy(); });
+        currentSocket.on("buddy-session-ended", () => { computeSessionMetrics(); setShowSummary(true); });
 
-            // Join Room on Socket AFTER media is acquired and listeners are registered
-            currentSocket.emit("join-buddy-room", { roomId, userId, name: user?.name });
-            setIsLoading(false);
-        };
-
-        initMedia();
-
-        // If buddy joins, notify
-        currentSocket.on("buddy-user-joined", (buddyUser) => {
-            console.log("[Socket] Partner joined: ", buddyUser.name);
-        });
-
-        // If buddy leaves or disconnects
-        currentSocket.on("buddy-user-left", (socketId) => {
-            console.log("[Socket] Partner disconnected socket:", socketId);
-            destroyPeer();
-        });
-
-        // If room ended by host
-        currentSocket.on("buddy-session-ended", () => {
-            computeSessionMetrics();
-            setShowSummary(true);
-        });
-
-        // Real-time Chat
         currentSocket.on("receive-buddy-message", (message) => {
             setMessages(prev => {
                 if (prev.some(m => m._id === message._id)) return prev;
@@ -536,28 +643,19 @@ const ActiveStudyBuddy = () => {
             });
         });
 
-        // Real-time Notes Sync
         currentSocket.on("buddy-notes-change", ({ notes: incomingNotes }) => {
             setNotes(incomingNotes);
             setIsBuddyTyping(true);
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            typingTimeoutRef.current = setTimeout(() => {
-                setIsBuddyTyping(false);
-            }, 1500);
+            typingTimeoutRef.current = setTimeout(() => setIsBuddyTyping(false), 1500);
         });
 
-        // Real-time Todo Sync
-        currentSocket.on("buddy-todo-change", ({ todos: incomingTodos }) => {
-            setTodos(incomingTodos);
-        });
+        currentSocket.on("buddy-todo-change", ({ todos: incomingTodos }) => setTodos(incomingTodos));
 
-        // Real-time Timer Sync
         currentSocket.on("buddy-timer-control", ({ action, value }) => {
-            if (action === 'start') {
-                setTimerActive(true);
-            } else if (action === 'pause') {
-                setTimerActive(false);
-            } else if (action === 'reset') {
+            if (action === 'start') setTimerActive(true);
+            else if (action === 'pause') setTimerActive(false);
+            else if (action === 'reset') {
                 setTimerActive(false);
                 setTimerRemaining(value.remaining);
                 setTimerDuration(value.duration);
@@ -570,33 +668,35 @@ const ActiveStudyBuddy = () => {
             }
         });
 
-        // Error full room
-        currentSocket.on("buddy-room-full", ({ message }) => {
-            alert(message);
-            navigate('/studybuddy');
-        });
+        currentSocket.on("buddy-room-full", ({ message }) => { alert(message); navigate('/studybuddy'); });
+
+        // --- Get media, then join room ---
+        (async () => {
+            try {
+                const ms = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                setStream(ms);
+                streamLocal.current = ms;
+                if (localVideoRef.current) localVideoRef.current.srcObject = ms;
+            } catch (err) {
+                console.warn("[Media] Camera/mic denied:", err);
+            }
+            currentSocket.emit("join-buddy-room", { roomId, userId, name: user?.name });
+            setIsLoading(false);
+        })();
 
         return () => {
-            if (currentSocket) {
-                currentSocket.off("buddy-room-users");
-                currentSocket.off("webrtc-signal");
-                currentSocket.off("buddy-user-joined");
-                currentSocket.off("buddy-user-left");
-                currentSocket.off("buddy-session-ended");
-                currentSocket.off("receive-buddy-message");
-                currentSocket.off("buddy-notes-change");
-                currentSocket.off("buddy-todo-change");
-                currentSocket.off("buddy-timer-control");
-                currentSocket.off("buddy-room-full");
-                currentSocket.disconnect();
-            }
-            if (localStreamRef) {
-                localStreamRef.getTracks().forEach(t => t.stop());
-            }
+            currentSocket.off("buddy-room-users"); currentSocket.off("webrtc-signal");
+            currentSocket.off("buddy-user-joined"); currentSocket.off("buddy-user-left");
+            currentSocket.off("buddy-session-ended"); currentSocket.off("receive-buddy-message");
+            currentSocket.off("buddy-notes-change"); currentSocket.off("buddy-todo-change");
+            currentSocket.off("buddy-timer-control"); currentSocket.off("buddy-room-full");
+            currentSocket.disconnect();
+            if (streamLocal.current) streamLocal.current.getTracks().forEach(t => t.stop());
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            destroyPeer();
+            doDestroy();
         };
-    }, [roomId, userId, initiateCall, answerCall, destroyPeer, navigate, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [roomId]);
 
     // Send chat message
     const handleSendMessage = (e) => {
