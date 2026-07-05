@@ -186,37 +186,163 @@ const ActiveStudyBuddy = () => {
 
     // --- WebRTC / Simple-Peer Signaling ---
 
+    const remoteStreamWatcherRef = useRef(null);
+    const remoteFallbackStreamRef = useRef(new MediaStream());
+
     const destroyPeer = useCallback(() => {
         if (peerRef.current) {
             console.log("[WebRTC] Destroying peer connection");
             peerRef.current.destroy();
             peerRef.current = null;
         }
+        if (remoteStreamWatcherRef.current) {
+            clearInterval(remoteStreamWatcherRef.current);
+            remoteStreamWatcherRef.current = null;
+        }
         setIsCallActive(false);
         remoteStreamRef.current = null;
+        remoteFallbackStreamRef.current = new MediaStream();
         if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = null;
         }
     }, []);
 
-    // Re-attach remote stream when it arrives or when ref becomes available
+    // Robust remote stream attachment with audio enable & autoplay retry
     const attachRemoteStream = useCallback((remoteStream) => {
         if (!remoteStream) return;
+
+        const tracks = remoteStream.getTracks();
+        const hasLiveTrack = tracks.some(t => t.readyState === 'live');
+        if (!hasLiveTrack && tracks.length > 0) return;
+
+        // Skip if same stream already attached
+        if (remoteStreamRef.current?.id === remoteStream.id) {
+            if (remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+                remoteVideoRef.current.srcObject = remoteStream;
+                remoteVideoRef.current.play().catch(() => {});
+            }
+            return;
+        }
+
+        console.log(`[WebRTC] Attaching remote stream: id=${remoteStream.id}, tracks=${tracks.map(t => t.kind + ':' + t.readyState).join(', ')}`);
+
         remoteStreamRef.current = remoteStream;
         setIsCallActive(true);
+
+        // Enable all audio tracks
+        remoteStream.getAudioTracks().forEach(track => {
+            track.enabled = true;
+        });
+
         if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play().catch(() => {});
+            remoteVideoRef.current.muted = false;
+            remoteVideoRef.current.volume = 1;
+            remoteVideoRef.current.play().catch((e) => {
+                console.warn('[WebRTC] Autoplay blocked:', e.message);
+                const retry = () => {
+                    remoteVideoRef.current?.play().catch(() => {});
+                    window.removeEventListener('pointerdown', retry);
+                    window.removeEventListener('keydown', retry);
+                };
+                window.addEventListener('pointerdown', retry, { once: true });
+                window.addEventListener('keydown', retry, { once: true });
+            });
+        }
+
+        // Stop watcher
+        if (remoteStreamWatcherRef.current) {
+            clearInterval(remoteStreamWatcherRef.current);
+            remoteStreamWatcherRef.current = null;
         }
     }, []);
 
-    // Ensure remote stream is attached after render if it was received before element existed
+    // Re-attach after render
     useEffect(() => {
         if (isCallActive && remoteStreamRef.current && remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
             remoteVideoRef.current.srcObject = remoteStreamRef.current;
+            remoteVideoRef.current.muted = false;
+            remoteVideoRef.current.volume = 1;
             remoteVideoRef.current.play().catch(() => {});
         }
     }, [isCallActive]);
+
+    // Extract remote stream from peer using multiple fallback methods
+    const tryExtractRemoteStream = useCallback((peer) => {
+        if (!peer || peer.destroyed) return false;
+
+        // Method 1: simple-peer internal _remoteStreams
+        const existing = peer._remoteStreams?.[0]
+            || (peer._pc?.getRemoteStreams && peer._pc.getRemoteStreams()[0]);
+        if (existing) {
+            attachRemoteStream(existing);
+            return true;
+        }
+
+        // Method 2: Build stream from RTCRtpReceiver tracks
+        const pc = peer._pc;
+        if (pc && typeof pc.getReceivers === 'function') {
+            const liveTracks = pc.getReceivers().map(r => r.track).filter(t => t && t.readyState === 'live');
+            if (liveTracks.length > 0) {
+                liveTracks.forEach(t => {
+                    if (!remoteFallbackStreamRef.current.getTracks().some(et => et.id === t.id)) {
+                        remoteFallbackStreamRef.current.addTrack(t);
+                    }
+                });
+                if (remoteFallbackStreamRef.current.getTracks().length > 0) {
+                    attachRemoteStream(remoteFallbackStreamRef.current);
+                    return true;
+                }
+            }
+        }
+        return false;
+    }, [attachRemoteStream]);
+
+    // Wire up all stream detection on a peer (stream, track, pc.ontrack, polling)
+    const registerPeerStreamHandlers = useCallback((peer) => {
+        peer.on("stream", (stream) => {
+            console.log("[WebRTC] peer.on('stream') fired");
+            attachRemoteStream(stream);
+        });
+
+        peer.on("track", (track, stream) => {
+            console.log(`[WebRTC] peer.on('track') fired: ${track.kind}:${track.readyState}`);
+            if (stream) { attachRemoteStream(stream); return; }
+            if (!remoteFallbackStreamRef.current.getTracks().some(t => t.id === track.id)) {
+                remoteFallbackStreamRef.current.addTrack(track);
+            }
+            attachRemoteStream(remoteFallbackStreamRef.current);
+        });
+
+        if (peer._pc) {
+            peer._pc.addEventListener('track', (event) => {
+                console.log(`[WebRTC] pc.ontrack: ${event.track?.kind}, streams=${event.streams?.length}`);
+                if (event.streams?.[0]) { attachRemoteStream(event.streams[0]); return; }
+                if (event.track) {
+                    if (!remoteFallbackStreamRef.current.getTracks().some(t => t.id === event.track.id)) {
+                        remoteFallbackStreamRef.current.addTrack(event.track);
+                    }
+                    attachRemoteStream(remoteFallbackStreamRef.current);
+                }
+            });
+        }
+
+        // Polling fallback — check every 800ms
+        if (remoteStreamWatcherRef.current) clearInterval(remoteStreamWatcherRef.current);
+        remoteStreamWatcherRef.current = setInterval(() => {
+            if (!peer || peer.destroyed) {
+                clearInterval(remoteStreamWatcherRef.current);
+                remoteStreamWatcherRef.current = null;
+                return;
+            }
+            if (!remoteStreamRef.current) {
+                tryExtractRemoteStream(peer);
+            } else {
+                clearInterval(remoteStreamWatcherRef.current);
+                remoteStreamWatcherRef.current = null;
+            }
+        }, 800);
+    }, [attachRemoteStream, tryExtractRemoteStream]);
 
     const initiateCall = useCallback((otherSocketId, currentStream) => {
         if (!currentStream) return;
@@ -228,22 +354,18 @@ const ActiveStudyBuddy = () => {
             initiator: true,
             trickle: true,
             stream: currentStream,
-            config: { iceServers }
+            config: { iceServers },
+            offerOptions: { offerToReceiveAudio: true, offerToReceiveVideo: true }
         });
 
         peer.on("signal", signal => {
-            console.log(`[WebRTC] Sending offer signal to socket ${otherSocketId}`);
             socketRef.current.emit("webrtc-signal", { signal, to: otherSocketId });
         });
 
-        peer.on("stream", remoteStream => {
-            console.log("[WebRTC] Received remote stream (initiator)");
-            attachRemoteStream(remoteStream);
-        });
-
         peer.on("connect", () => {
-            console.log("[WebRTC] Peer connected");
+            console.log("[WebRTC] Peer connected (initiator)");
             setIsCallActive(true);
+            setTimeout(() => tryExtractRemoteStream(peer), 300);
         });
 
         peer.on("error", err => {
@@ -256,8 +378,9 @@ const ActiveStudyBuddy = () => {
             destroyPeer();
         });
 
+        registerPeerStreamHandlers(peer);
         peerRef.current = peer;
-    }, [destroyPeer, attachRemoteStream]);
+    }, [destroyPeer, registerPeerStreamHandlers, tryExtractRemoteStream]);
 
     const answerCall = useCallback((incomingSignal, otherSocketId, currentStream) => {
         if (!currentStream) return;
@@ -269,22 +392,18 @@ const ActiveStudyBuddy = () => {
             initiator: false,
             trickle: true,
             stream: currentStream,
-            config: { iceServers }
+            config: { iceServers },
+            offerOptions: { offerToReceiveAudio: true, offerToReceiveVideo: true }
         });
 
         peer.on("signal", signal => {
-            console.log(`[WebRTC] Sending answer signal to socket ${otherSocketId}`);
             socketRef.current.emit("webrtc-signal", { signal, to: otherSocketId });
-        });
-
-        peer.on("stream", remoteStream => {
-            console.log("[WebRTC] Received remote stream (answering)");
-            attachRemoteStream(remoteStream);
         });
 
         peer.on("connect", () => {
             console.log("[WebRTC] Peer connected (answering)");
             setIsCallActive(true);
+            setTimeout(() => tryExtractRemoteStream(peer), 300);
         });
 
         peer.on("error", err => {
@@ -297,9 +416,10 @@ const ActiveStudyBuddy = () => {
             destroyPeer();
         });
 
+        registerPeerStreamHandlers(peer);
         peer.signal(incomingSignal);
         peerRef.current = peer;
-    }, [destroyPeer, attachRemoteStream]);
+    }, [destroyPeer, registerPeerStreamHandlers, tryExtractRemoteStream]);
 
     // Socket Setup
     useEffect(() => {
