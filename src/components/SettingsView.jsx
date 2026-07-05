@@ -18,6 +18,7 @@ import {
     FileText
 } from 'lucide-react';
 import { getCurrentUser, updateProfile, changePassword, deleteAccount, logout } from '../services/authService';
+import { submitReport } from '../services/adminService';
 import { getInstructorMentorProfile, saveInstructorMentorProfile } from '../services/instructorMentorProfileService';
 import { useNavigate } from 'react-router-dom';
 
@@ -191,15 +192,23 @@ const SettingsView = ({ isDark, setIsDark, onProfileUpdate }) => {
         }
     };
 
-    const handleBugSubmit = (e) => {
+    const handleBugSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
-        // Simulate bug report submission
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            await submitReport({
+                reason: bugReport.title,
+                description: `Severity: ${bugReport.severity}\n\nDescription:\n${bugReport.description}`,
+                category: 'bug'
+            });
             setBugReport({ title: '', description: '', severity: 'low' });
             showMessage('success', 'Bug reported! Our team will look into it.');
-        }, 1500);
+        } catch (err) {
+            console.error("Failed to report bug:", err);
+            showMessage('error', err.response?.data?.msg || 'Failed to submit bug report');
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleDeleteAccount = async () => {

@@ -1,8 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { Users, Plus, Search, Video, ArrowRight, Loader2, DoorOpen, X } from 'lucide-react';
-import { getStudyRooms, createStudyRoom } from '../services/studyRoomService';
+import { Users, Plus, Search, Video, ArrowRight, Loader2, DoorOpen, X, Lock } from 'lucide-react';
+import { getStudyRooms, createStudyRoom, getStudyRoom } from '../services/studyRoomService';
+
+const generateRandomRoomId = () => {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = 'SB-';
+    for (let i = 0; i < 6; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+};
 
 const StudyRoomList = () => {
     const [rooms, setRooms] = useState([]);
@@ -13,10 +22,22 @@ const StudyRoomList = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newRoomName, setNewRoomName] = useState('');
     const [newRoomDesc, setNewRoomDesc] = useState('');
+    const [maxParticipants, setMaxParticipants] = useState(10);
+    const [isPrivate, setIsPrivate] = useState(false);
+    const [customRoomId, setCustomRoomId] = useState('');
+    const [passcode, setPasscode] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+
+    // Private Join Modal state
+    const [isJoinPrivateOpen, setIsJoinPrivateOpen] = useState(false);
+    const [selectedRoomToJoin, setSelectedRoomToJoin] = useState(null);
+    const [joinPasscode, setJoinPasscode] = useState('');
+    const [joinError, setJoinError] = useState('');
+    const [isJoining, setIsJoining] = useState(false);
 
     const navigate = useNavigate();
     const user = JSON.parse(sessionStorage.getItem('user'));
+    const userId = user?.id || user?._id;
 
     useEffect(() => {
         fetchRooms();
@@ -49,17 +70,64 @@ const StudyRoomList = () => {
             const newRoom = await createStudyRoom({
                 name: newRoomName,
                 description: newRoomDesc,
-                userId
+                userId,
+                maxParticipants,
+                isPrivate,
+                customRoomId: isPrivate ? customRoomId : null,
+                passcode: isPrivate ? passcode : null
             });
             setIsModalOpen(false);
             setNewRoomName('');
             setNewRoomDesc('');
+            setMaxParticipants(10);
+            setIsPrivate(false);
+            setCustomRoomId('');
+            setPasscode('');
+
+            // Save passcode for creator automatically so they don't get prompted
+            if (isPrivate && passcode) {
+                sessionStorage.setItem(`studyroom_passcode_${newRoom._id}`, passcode);
+            }
+
             navigate(`/studyroom/${newRoom._id}`);
         } catch (error) {
             console.error("Failed to create room:", error);
             alert(error.message || "Failed to create room");
         } finally {
             setIsCreating(false);
+        }
+    };
+
+    const handleJoinClick = (room) => {
+        const creatorId = room.createdBy?._id || room.createdBy;
+        if (room.isPrivate && String(creatorId) !== String(userId)) {
+            setSelectedRoomToJoin(room);
+            setJoinPasscode('');
+            setJoinError('');
+            setIsJoinPrivateOpen(true);
+        } else {
+            navigate(`/studyroom/${room._id}`);
+        }
+    };
+
+    const handlePrivateJoinSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedRoomToJoin || !joinPasscode.trim()) return;
+
+        setIsJoining(true);
+        setJoinError('');
+        try {
+            // Verify passcode by fetching room details with this passcode
+            await getStudyRoom(selectedRoomToJoin._id, userId, joinPasscode);
+            // Save to session storage
+            sessionStorage.setItem(`studyroom_passcode_${selectedRoomToJoin._id}`, joinPasscode);
+            setIsJoinPrivateOpen(false);
+            navigate(`/studyroom/${selectedRoomToJoin._id}`);
+        } catch (error) {
+            console.error("Failed to join private room:", error);
+            setJoinError(error.message || "Incorrect room password");
+        } finally {
+            setIsJoining(false);
         }
     };
 
@@ -162,12 +230,25 @@ const StudyRoomList = () => {
                                 >
                                     {/* Card Header */}
                                     <div className="flex justify-between items-start mb-3">
-                                        <h3 className="text-slate-900 dark:text-white font-semibold text-lg truncate pr-2 flex-1">
-                                            {room.name}
-                                        </h3>
-                                        <span className="px-1.5 py-0.5 rounded text-[10px] border font-mono transition-colors bg-green-50 text-green-500 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20 shrink-0">
-                                            ACTIVE
-                                        </span>
+                                        <div className="flex-1 min-w-0 pr-2">
+                                            <h3 className="text-slate-900 dark:text-white font-semibold text-lg truncate flex items-center gap-1.5">
+                                                {room.name}
+                                                {room.isPrivate && <Lock size={14} className="text-amber-500 shrink-0" />}
+                                            </h3>
+                                            {room.isPrivate && room.customRoomId && (
+                                                <span className="text-[10px] font-mono text-purple-600 dark:text-purple-400 font-bold bg-purple-50 dark:bg-purple-900/20 px-1.5 py-0.5 rounded border border-purple-100 dark:border-purple-500/10 mt-0.5 inline-block">
+                                                    ID: {room.customRoomId}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                            <span className="px-1.5 py-0.5 rounded text-[10px] border font-mono transition-colors bg-green-50 text-green-500 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20">
+                                                ACTIVE
+                                            </span>
+                                            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold flex items-center gap-1">
+                                                <Users size={10} /> Max: {room.maxParticipants || 10}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     {/* Description */}
@@ -193,7 +274,7 @@ const StudyRoomList = () => {
                                         </div>
 
                                         <button
-                                            onClick={() => navigate(`/studyroom/${room._id}`)}
+                                            onClick={() => handleJoinClick(room)}
                                             className="px-4 py-2 rounded-full text-xs font-bold text-purple-600 bg-purple-50 hover:bg-purple-100 dark:text-white dark:bg-[#8c30e8]/20 dark:hover:bg-[#8c30e8]/40 transition-colors border border-transparent dark:border-[#8c30e8]/30 flex items-center gap-1.5"
                                         >
                                             Join <ArrowRight size={14} />
@@ -208,29 +289,29 @@ const StudyRoomList = () => {
                 {/* ── Create Room Modal ── */}
                 {isModalOpen && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm">
-                        <div className="rounded-3xl p-8 relative overflow-hidden shadow-2xl border bg-white border-slate-200 dark:bg-[#191121] dark:border-white/10 w-full max-w-md animate-in fade-in zoom-in duration-200">
+                        <div className="rounded-3xl p-8 relative overflow-hidden shadow-2xl border bg-white border-slate-200 dark:bg-[#191121] dark:border-white/10 w-full max-w-md max-h-[85vh] flex flex-col animate-in fade-in zoom-in duration-200">
                             
                             {/* Decorative modal glow */}
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-40 bg-purple-500/10 dark:bg-[#8c30e8]/20 rounded-full blur-[80px] pointer-events-none" />
 
                             <button
                                 onClick={() => setIsModalOpen(false)}
-                                className="absolute top-5 right-5 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white transition-colors z-10"
+                                className="absolute top-5 right-5 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white transition-colors z-20"
                             >
                                 <X size={18} />
                             </button>
 
-                            <div className="relative z-10">
-                                <div className="flex justify-center mb-4">
+                            <div className="relative z-10 flex flex-col flex-1 overflow-hidden">
+                                <div className="flex justify-center mb-2">
                                     <div className="w-12 h-12 rounded-full bg-purple-600 dark:bg-[#8c30e8] flex items-center justify-center shadow-lg shadow-purple-500/30">
                                         <Plus size={24} className="text-white" />
                                     </div>
                                 </div>
-                                <h2 className="text-2xl font-serif font-medium text-center text-slate-900 dark:text-white mb-6">
+                                <h2 className="text-2xl font-serif font-medium text-center text-slate-900 dark:text-white mb-4">
                                     Create New Room
                                 </h2>
 
-                                <form onSubmit={handleCreateRoom} className="space-y-4">
+                                <form onSubmit={handleCreateRoom} className="space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar">
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-1.5">
                                             Room Name
@@ -257,12 +338,144 @@ const StudyRoomList = () => {
                                         />
                                     </div>
 
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-1.5">
+                                            Maximum Participants
+                                        </label>
+                                        <select
+                                            value={maxParticipants}
+                                            onChange={(e) => setMaxParticipants(Number(e.target.value))}
+                                            className="w-full px-4 py-2.5 rounded-xl border transition-colors bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                        >
+                                            <option value={2}>2 Participants</option>
+                                            <option value={5}>5 Participants</option>
+                                            <option value={10}>10 Participants</option>
+                                            <option value={15}>15 Participants</option>
+                                            <option value={20}>20 Participants</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Privacy Toggle */}
+                                    <div className="pt-2">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={isPrivate}
+                                                onChange={(e) => {
+                                                    const checked = e.target.checked;
+                                                    setIsPrivate(checked);
+                                                    if (checked && !customRoomId) {
+                                                        setCustomRoomId(generateRandomRoomId());
+                                                    }
+                                                }}
+                                                className="w-4 h-4 text-purple-600 rounded bg-slate-100 border-slate-300 dark:bg-[#1a1524] dark:border-white/10"
+                                            />
+                                            <span className="text-sm font-medium text-slate-700 dark:text-gray-300 flex items-center gap-1.5 select-none">
+                                                <Lock size={14} className="text-slate-400" /> Private Room (requires passcode)
+                                            </span>
+                                        </label>
+                                    </div>
+
+                                    {/* Conditional Custom Room ID & Password fields */}
+                                    {isPrivate && (
+                                        <div className="space-y-4 pt-2 border-t border-slate-100 dark:border-white/5 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-1.5">
+                                                    Room ID
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    required={isPrivate}
+                                                    value={customRoomId}
+                                                    onChange={(e) => setCustomRoomId(e.target.value)}
+                                                    placeholder="e.g. SB-XXXXXX"
+                                                    autoComplete="off"
+                                                    className="w-full px-4 py-2.5 rounded-xl border transition-colors bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-white/30 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-1.5">
+                                                    Room Password
+                                                </label>
+                                                <input
+                                                    type="password"
+                                                    required={isPrivate}
+                                                    value={passcode}
+                                                    onChange={(e) => setPasscode(e.target.value)}
+                                                    placeholder="Set room password"
+                                                    autoComplete="new-password"
+                                                    className="w-full px-4 py-2.5 rounded-xl border transition-colors bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-white/30 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <button
                                         type="submit"
                                         disabled={!newRoomName.trim() || isCreating}
-                                        className="w-full mt-6 py-3.5 rounded-xl font-bold text-white shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] shadow-purple-500/30 flex items-center justify-center"
+                                        className="w-full mt-4 py-3.5 rounded-xl font-bold text-white shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] shadow-purple-500/30 flex items-center justify-center shrink-0"
                                     >
                                         {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Start Room'}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Join Private Room Modal ── */}
+                {isJoinPrivateOpen && selectedRoomToJoin && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 dark:bg-black/60 backdrop-blur-sm">
+                        <div className="rounded-3xl p-8 relative overflow-hidden shadow-2xl border bg-white border-slate-200 dark:bg-[#191121] dark:border-white/10 w-full max-w-sm animate-in fade-in zoom-in duration-200">
+                            
+                            <button
+                                onClick={() => setIsJoinPrivateOpen(false)}
+                                className="absolute top-5 right-5 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white transition-colors z-10"
+                            >
+                                <X size={18} />
+                            </button>
+
+                            <div className="relative z-10">
+                                <div className="flex justify-center mb-4">
+                                    <div className="w-12 h-12 rounded-full bg-amber-500 flex items-center justify-center shadow-lg shadow-amber-500/30">
+                                        <Lock size={20} className="text-white" />
+                                    </div>
+                                </div>
+                                <h2 className="text-xl font-bold text-center text-slate-900 dark:text-white mb-2">
+                                    Private Room
+                                </h2>
+                                <p className="text-xs text-slate-500 dark:text-white/60 text-center mb-6">
+                                    This room is private. Please enter the password to join.
+                                </p>
+
+                                <form onSubmit={handlePrivateJoinSubmit} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-white/40 mb-1.5">
+                                            Room Password
+                                        </label>
+                                        <input
+                                            type="password"
+                                            required
+                                            autoFocus
+                                            value={joinPasscode}
+                                            onChange={(e) => setJoinPasscode(e.target.value)}
+                                            placeholder="Enter password"
+                                            className="w-full px-4 py-2.5 rounded-xl border transition-colors bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-white/30 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                        />
+                                    </div>
+
+                                    {joinError && (
+                                        <p className="text-xs text-red-500 font-semibold text-center">
+                                            ⚠️ {joinError}
+                                        </p>
+                                    )}
+
+                                    <button
+                                        type="submit"
+                                        disabled={!joinPasscode.trim() || isJoining}
+                                        className="w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] shadow-purple-500/30 flex items-center justify-center"
+                                    >
+                                        {isJoining ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Join Room'}
                                     </button>
                                 </form>
                             </div>

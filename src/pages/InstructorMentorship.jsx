@@ -7,9 +7,25 @@ import {
     Save,
     CheckCircle2,
     XCircle,
-    Clock
+    Clock,
+    Users,
+    CreditCard,
+    DollarSign,
 } from 'lucide-react';
 import { getInstructorMentorProfile } from '../services/instructorMentorProfileService';
+import {
+    getGroupRequestsForMentor,
+    acceptGroupRequest,
+    declineGroupRequest,
+    getPendingPayments,
+    verifyPayment,
+    rejectPayment,
+    verifyJoinPayment,
+    rejectJoinPayment,
+    getAllGroupSessionsForMentor,
+    acceptJoinRequest,
+    declineJoinRequest,
+} from '../services/groupSessionService';
 import {
     DEFAULT_WEEKLY_AVAILABILITY,
     getMentorWeeklyAvailability,
@@ -28,6 +44,8 @@ import {
     isSessionPast,
     isSessionJoinableNow,
     isSessionUpcomingOrJoinableNow,
+    verifySessionPayment,
+    rejectSessionPayment,
 } from '../services/mentorSessionService';
 
 const dayLabels = {
@@ -48,6 +66,9 @@ const InstructorMentorship = () => {
     const [mentorRequests, setMentorRequests] = useState([]);
     const [mentorUpcoming, setMentorUpcoming] = useState([]);
     const [mentorName, setMentorName] = useState('');
+    const [groupRequests, setGroupRequests] = useState([]);
+    const [pendingPayments, setPendingPayments] = useState([]);
+    const [mentorGroupSessions, setMentorGroupSessions] = useState([]);
 
     useEffect(() => {
         const initialize = async () => {
@@ -78,6 +99,20 @@ const InstructorMentorship = () => {
                 setWeeklyAvailability(availability);
                 setMentorRequests(requests);
                 setMentorUpcoming(upcoming);
+
+                // Load group session data
+                try {
+                    const [gRequests, gPayments, gSessions] = await Promise.all([
+                        getGroupRequestsForMentor(),
+                        getPendingPayments(),
+                        getAllGroupSessionsForMentor(),
+                    ]);
+                    setGroupRequests(gRequests);
+                    setPendingPayments(gPayments);
+                    setMentorGroupSessions(gSessions);
+                } catch (gErr) {
+                    console.error('Failed to load group session data:', gErr);
+                }
             } catch (error) {
                 console.error('Failed to initialize instructor mentorship:', error);
             }
@@ -96,7 +131,7 @@ const InstructorMentorship = () => {
                     student: session.studentName,
                     time: `${session.dateLabel}, ${session.timeSlot}`,
                     startAt,
-                    canJoinNow: isSessionJoinableNow(session),
+                    canJoinNow: (session.paymentStatus === 'verified' || session.paymentStatus === 'none') && isSessionJoinableNow(session),
                 };
             })
             .filter((session) => Boolean(session.startAt)),
@@ -126,6 +161,32 @@ const InstructorMentorship = () => {
         message: request.message,
     }));
 
+    const pendingJoinRequests = useMemo(() => {
+        const list = [];
+        mentorGroupSessions.forEach(session => {
+            if (session.status === 'scheduled' && session.participants) {
+                session.participants.forEach(p => {
+                    if (p.paymentStatus === 'pending') {
+                        list.push({
+                            sessionId: session._id,
+                            studentId: p.student?._id || p.student,
+                            studentName: p.studentName,
+                            topic: session.topic,
+                            description: session.description,
+                            dateLabel: session.dateLabel,
+                            timeSlot: session.timeSlot,
+                            rate: session.rate,
+                            maxParticipants: session.maxParticipants,
+                            createdBy: session.createdBy,
+                            participantsCount: session.participants?.filter(p2 => p2.paymentStatus === 'verified').length || 0
+                        });
+                    }
+                });
+            }
+        });
+        return list;
+    }, [mentorGroupSessions]);
+
     const refreshMentorSessionData = async () => {
         if (!mentorName) return;
         try {
@@ -145,6 +206,7 @@ const InstructorMentorship = () => {
 
         const interval = setInterval(() => {
             refreshMentorSessionData();
+            refreshGroupData();
         }, 2000);
 
         return () => clearInterval(interval);
@@ -158,6 +220,92 @@ const InstructorMentorship = () => {
     const handleDeclineRequest = async (requestId) => {
         await declineSessionRequest(requestId, mentorName);
         await refreshMentorSessionData();
+    };
+
+    // ── Group Session Handlers ──
+    const refreshGroupData = async () => {
+        try {
+            const [gRequests, gPayments, gSessions] = await Promise.all([
+                getGroupRequestsForMentor(),
+                getPendingPayments(),
+                getAllGroupSessionsForMentor(),
+            ]);
+            setGroupRequests(gRequests);
+            setPendingPayments(gPayments);
+            setMentorGroupSessions(gSessions);
+        } catch (error) {
+            console.error('Failed to refresh group data:', error);
+        }
+    };
+
+    const handleAcceptGroupRequest = async (sessionId) => {
+        try {
+            await acceptGroupRequest(sessionId);
+            await refreshGroupData();
+        } catch (error) {
+            alert(error?.response?.data?.msg || 'Failed to accept group request.');
+        }
+    };
+
+    const handleDeclineGroupRequest = async (sessionId) => {
+        try {
+            await declineGroupRequest(sessionId);
+            await refreshGroupData();
+        } catch (error) {
+            alert(error?.response?.data?.msg || 'Failed to decline group request.');
+        }
+    };
+
+    const handleVerifyPayment = async (sessionId, studentId, sessionStatus, type) => {
+        try {
+            if (type === '1-1') {
+                await verifySessionPayment(sessionId);
+                await refreshMentorSessionData();
+            } else if (sessionStatus === 'scheduled') {
+                await verifyJoinPayment(sessionId, studentId);
+            } else {
+                await verifyPayment(sessionId, studentId);
+            }
+            await refreshGroupData();
+        } catch (error) {
+            alert(error?.response?.data?.msg || 'Failed to verify payment.');
+        }
+    };
+
+    const handleRejectPayment = async (sessionId, studentId, sessionStatus, type) => {
+        try {
+            if (type === '1-1') {
+                await rejectSessionPayment(sessionId);
+                await refreshMentorSessionData();
+            } else if (sessionStatus === 'scheduled') {
+                await rejectJoinPayment(sessionId, studentId);
+            } else {
+                await rejectPayment(sessionId, studentId);
+            }
+            await refreshGroupData();
+        } catch (error) {
+            alert(error?.response?.data?.msg || 'Failed to reject payment.');
+        }
+    };
+
+    const handleAcceptStudentJoin = async (sessionId, studentId) => {
+        try {
+            await acceptJoinRequest(sessionId, studentId);
+            await refreshGroupData();
+            alert("Join request accepted.");
+        } catch (error) {
+            alert(error?.response?.data?.msg || "Failed to accept join request.");
+        }
+    };
+
+    const handleDeclineStudentJoin = async (sessionId, studentId) => {
+        try {
+            await declineJoinRequest(sessionId, studentId);
+            await refreshGroupData();
+            alert("Join request declined.");
+        } catch (error) {
+            alert(error?.response?.data?.msg || "Failed to decline join request.");
+        }
     };
 
     const handleTakeSession = (session) => {
@@ -248,6 +396,36 @@ const InstructorMentorship = () => {
                             >
                                 Availability
                             </button>
+                            <button
+                                onClick={() => setActivePanel('groupRequests')}
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold tracking-wide transition-all duration-200 ${
+                                    activePanel === 'groupRequests'
+                                        ? 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8] dark:text-white shadow-sm'
+                                        : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                Group Requests
+                                {(groupRequests.filter(g => g.status === 'pending').length + pendingJoinRequests.length) > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 text-[10px]">
+                                        {groupRequests.filter(g => g.status === 'pending').length + pendingJoinRequests.length}
+                                    </span>
+                                )}
+                            </button>
+                            <button
+                                onClick={() => setActivePanel('payments')}
+                                className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold tracking-wide transition-all duration-200 ${
+                                    activePanel === 'payments'
+                                        ? 'bg-purple-50 text-purple-600 dark:bg-[#8c30e8] dark:text-white shadow-sm'
+                                        : 'text-slate-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-white/5'
+                                }`}
+                            >
+                                Payments
+                                {pendingPayments.length > 0 && (
+                                    <span className="ml-2 px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-500/20 dark:text-orange-400 text-[10px]">
+                                        {pendingPayments.length}
+                                    </span>
+                                )}
+                            </button>
                         </div>
 
                         {/* ── Sessions Panel ── */}
@@ -276,9 +454,21 @@ const InstructorMentorship = () => {
                                                             Take Session
                                                         </button>
                                                     ) : (
-                                                        <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10">
-                                                            {session.status}
-                                                        </span>
+                                                        session.status === 'accepted' ? (
+                                                            session.paymentStatus === 'sent' ? (
+                                                                <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
+                                                                    Checking Payment
+                                                                </span>
+                                                            ) : (
+                                                                <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-500/10 dark:text-orange-400 dark:border-orange-500/20">
+                                                                    Payment Pending
+                                                                </span>
+                                                            )
+                                                        ) : (
+                                                            <span className="px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10">
+                                                                {session.status}
+                                                            </span>
+                                                        )
                                                     )}
                                                 </div>
                                             </div>
@@ -291,8 +481,119 @@ const InstructorMentorship = () => {
                                     </div>
                                 </div>
 
-                                {/* Recent Sessions */}
+                                {/* Group Sessions (Upcoming & Pending Payment) */}
                                 <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Group Sessions</h3>
+                                    <div className="space-y-4">
+                                        {mentorGroupSessions.filter(session => session.status !== 'declined').map((session) => {
+                                            const isScheduled = session.status === 'scheduled';
+                                            const isPendingPayment = session.status === 'accepted';
+                                            
+                                            return (
+                                                <div key={session._id} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-5 hover:border-purple-200 dark:hover:border-[#8c30e8]/30 transition-all flex flex-col justify-between gap-4">
+                                                    <div>
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <p className="font-bold text-slate-900 dark:text-white text-base">{session.topic}</p>
+                                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border shrink-0 ${
+                                                                isScheduled
+                                                                    ? 'bg-green-50 text-green-600 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20'
+                                                                    : isPendingPayment
+                                                                        ? 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20'
+                                                                        : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-white/5 dark:text-gray-400 dark:border-white/10'
+                                                            }`}>
+                                                                {isScheduled ? 'Scheduled' : isPendingPayment ? 'Payment Pending' : session.status}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-sm font-medium text-slate-500 dark:text-gray-400 mt-1">{session.description}</p>
+                                                        <div className="mt-3 flex items-center gap-3 text-xs text-slate-500 dark:text-gray-400 font-medium">
+                                                            <span className="flex items-center gap-1"><CalendarDays size={12} /> {session.dateLabel}</span>
+                                                            <span className="flex items-center gap-1"><Clock size={12} /> {session.timeSlot}</span>
+                                                        </div>
+                                                        <div className="mt-1 text-xs text-slate-500 dark:text-gray-400">
+                                                            <span className="flex items-center gap-1"><Users size={12} /> {session.participants?.filter(p => p.paymentStatus === 'verified').length} / {session.maxParticipants} Participants verified</span>
+                                                        </div>
+
+                                                        {/* Participants list */}
+                                                        {session.participants && session.participants.length > 0 && (
+                                                            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 space-y-3">
+                                                                <p className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Join Requests & Enrolled Students</p>
+                                                                <div className="space-y-2">
+                                                                    {session.participants.map((p) => {
+                                                                        const pStudentId = p.student?._id || p.student;
+                                                                        return (
+                                                                            <div key={pStudentId} className="flex items-center justify-between text-xs bg-white dark:bg-black/10 p-2.5 rounded-lg border border-slate-100 dark:border-white/5">
+                                                                                <div>
+                                                                                    <span className="font-bold text-slate-800 dark:text-gray-200">{p.studentName}</span>
+                                                                                    <span className="ml-2 text-[10px] text-slate-400">({p.paymentStatus})</span>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    {p.paymentStatus === 'pending' && (
+                                                                                        <>
+                                                                                            <button
+                                                                                                onClick={() => handleAcceptStudentJoin(session._id, pStudentId)}
+                                                                                                className="px-2.5 py-1 rounded bg-green-500 hover:bg-green-600 text-white font-bold text-[10px] transition-colors"
+                                                                                            >
+                                                                                                Accept
+                                                                                            </button>
+                                                                                            <button
+                                                                                                onClick={() => handleDeclineStudentJoin(session._id, pStudentId)}
+                                                                                                className="px-2.5 py-1 rounded bg-red-500 hover:bg-red-600 text-white font-bold text-[10px] transition-colors"
+                                                                                            >
+                                                                                                Decline
+                                                                                            </button>
+                                                                                        </>
+                                                                                    )}
+                                                                                    {p.paymentStatus === 'sent' && (
+                                                                                        <span className="text-amber-500 font-bold text-[10px]">Awaiting Payment Verification (See Payments tab)</span>
+                                                                                    )}
+                                                                                    {p.paymentStatus === 'accepted' && (
+                                                                                        <span className="text-blue-500 font-medium text-[10px]">Awaiting Student Payment</span>
+                                                                                    )}
+                                                                                    {p.paymentStatus === 'verified' && (
+                                                                                        <span className="text-green-500 font-bold text-[10px]">✓ Verified</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {isScheduled && (
+                                                        isSessionJoinableNow(session) ? (
+                                                            <button
+                                                                onClick={() => handleTakeSession({
+                                                                    id: session._id,
+                                                                    studentName: 'Group',
+                                                                    subject: session.topic,
+                                                                    dateLabel: session.dateLabel,
+                                                                    timeSlot: session.timeSlot
+                                                                })}
+                                                                className="w-full px-5 py-2.5 rounded-xl text-sm font-bold bg-purple-600 hover:bg-purple-700 dark:bg-[#8c30e8] dark:hover:bg-[#a760eb] text-white transition-colors shadow-md text-center"
+                                                            >
+                                                                Take Session
+                                                            </button>
+                                                        ) : (
+                                                            <span className="w-full text-center px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 dark:bg-white/5 dark:text-gray-300 dark:border-white/10">
+                                                                Upcoming
+                                                            </span>
+                                                        )
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                        {mentorGroupSessions.filter(session => session.status !== 'declined').length === 0 && (
+                                            <div className="rounded-xl p-8 border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-black/20 text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
+                                                No group sessions yet. Accept group requests to set them up.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Recent Sessions */}
+                                <div className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6 col-span-full">
                                     <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-6">Recent Sessions</h3>
                                     <div className="space-y-4">
                                         {recentSessions.map((session) => (
@@ -482,6 +783,154 @@ const InstructorMentorship = () => {
                                         );
                                     })}
                                 </div>
+                            </div>
+                        )}
+
+                        {/* ── Group Requests Panel ── */}
+                        {activePanel === 'groupRequests' && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <Users className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                                    Group Session Requests
+                                </h3>
+                                {groupRequests.filter(g => g.status === 'pending').map((gs) => (
+                                    <div key={gs._id} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Users size={16} className="text-emerald-500" />
+                                                <span className="text-sm font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Group Session Request</span>
+                                            </div>
+                                            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20">
+                                                Pending
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">From:</strong> {gs.createdBy?.name || gs.participants?.[0]?.studentName || 'Student'}</div>
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Topic:</strong> {gs.topic}</div>
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Description:</strong> {gs.description}</div>
+                                            <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-gray-400">
+                                                <span className="flex items-center gap-1"><CalendarDays size={14} /> {gs.dateLabel}</span>
+                                                <span className="flex items-center gap-1"><Clock size={14} /> {gs.timeSlot}</span>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-gray-400">
+                                                <span className="flex items-center gap-1"><Users size={14} /> Max {gs.maxParticipants} participants</span>
+                                                <span className="flex items-center gap-1"><DollarSign size={14} /> Rs. {gs.rate} / participant</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col md:flex-row items-center gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
+                                            <button
+                                                onClick={() => handleAcceptGroupRequest(gs._id)}
+                                                className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 text-white text-sm font-bold transition-colors shadow-md flex items-center justify-center gap-1.5"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" /> Accept
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeclineGroupRequest(gs._id)}
+                                                className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/20 text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                <XCircle className="w-4 h-4" /> Decline
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {/* Group Session Join Requests */}
+                                {pendingJoinRequests.map((jr) => (
+                                    <div key={`join-request-${jr.sessionId}-${jr.studentId}`} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <Users size={16} className="text-blue-500" />
+                                                <span className="text-sm font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">Join Request</span>
+                                            </div>
+                                            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20">
+                                                Pending Approval
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Student:</strong> {jr.studentName}</div>
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Topic:</strong> {jr.topic}</div>
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Description:</strong> {jr.description}</div>
+                                            <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-gray-400">
+                                                <span className="flex items-center gap-1"><CalendarDays size={14} /> {jr.dateLabel}</span>
+                                                <span className="flex items-center gap-1"><Clock size={14} /> {jr.timeSlot}</span>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-gray-400">
+                                                <span className="flex items-center gap-1"><Users size={14} /> {jr.participantsCount} / {jr.maxParticipants} participants verified</span>
+                                                <span className="flex items-center gap-1"><DollarSign size={14} /> Rs. {jr.rate} / participant</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col md:flex-row items-center gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
+                                            <button
+                                                onClick={() => handleAcceptStudentJoin(jr.sessionId, jr.studentId)}
+                                                className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 text-white text-sm font-bold transition-colors shadow-md flex items-center justify-center gap-1.5"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" /> Accept Joiner
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeclineStudentJoin(jr.sessionId, jr.studentId)}
+                                                className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/20 text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                <XCircle className="w-4 h-4" /> Decline Joiner
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {groupRequests.filter(g => g.status === 'pending').length === 0 && pendingJoinRequests.length === 0 && (
+                                    <div className="rounded-xl p-10 border border-slate-200 dark:border-white/5 bg-white dark:bg-[#191121] text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
+                                        No pending group session requests.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ── Payments Panel ── */}
+                        {activePanel === 'payments' && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <CreditCard className="w-5 h-5 text-orange-500" />
+                                    Payment Verifications
+                                </h3>
+                                {pendingPayments.map((payment, idx) => (
+                                    <div key={`${payment.sessionId}-${payment.studentId}-${idx}`} className="bg-white dark:bg-[#191121] border border-slate-200 dark:border-[#8c30e8]/30 shadow-sm rounded-2xl p-6">
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <CreditCard size={16} className="text-orange-500" />
+                                                <span className="text-sm font-bold uppercase tracking-wider text-orange-600 dark:text-orange-400">Payment Verification</span>
+                                            </div>
+                                            <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20">
+                                                Awaiting Check
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Student:</strong> {payment.studentName}</div>
+                                            <div className="text-slate-500 dark:text-gray-400 text-sm"><strong className="text-slate-900 dark:text-white">Session:</strong> {payment.topic}</div>
+                                            <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-gray-400">
+                                                <span className="flex items-center gap-1"><CalendarDays size={14} /> {payment.dateLabel} at {payment.timeSlot}</span>
+                                                <span className="flex items-center gap-1"><DollarSign size={14} /> Rs. {payment.rate}</span>
+                                            </div>
+                                            <div className="text-slate-400 dark:text-gray-500 text-xs">Payment marked sent: {payment.joinedAt ? new Date(payment.joinedAt).toLocaleDateString() : 'N/A'}</div>
+                                        </div>
+                                        <div className="flex flex-col md:flex-row items-center gap-3 mt-5 pt-4 border-t border-slate-100 dark:border-white/5">
+                                            <button
+                                                onClick={() => handleVerifyPayment(payment.sessionId, payment.studentId, payment.sessionStatus, payment.type)}
+                                                className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-500 text-white text-sm font-bold transition-colors shadow-md flex items-center justify-center gap-1.5"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" /> Verify Payment
+                                            </button>
+                                            <button
+                                                onClick={() => handleRejectPayment(payment.sessionId, payment.studentId, payment.sessionStatus, payment.type)}
+                                                className="flex-1 md:flex-none px-5 py-2.5 rounded-xl bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/20 dark:hover:bg-red-500/20 text-sm font-bold transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                                <XCircle className="w-4 h-4" /> Reject Payment
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                {pendingPayments.length === 0 && (
+                                    <div className="rounded-xl p-10 border border-slate-200 dark:border-white/5 bg-white dark:bg-[#191121] text-sm font-medium text-slate-500 dark:text-gray-400 text-center">
+                                        No pending payment verifications.
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

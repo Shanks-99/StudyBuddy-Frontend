@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getCurrentUser } from '../services/authService';
 import AdminSidebar from '../components/AdminSidebar';
 import AdminOverview from '../components/admin/AdminOverview';
@@ -11,9 +11,21 @@ import AdminAnalytics from '../components/admin/AdminAnalytics';
 import AdminSettings from '../components/admin/AdminSettings';
 
 const AdminDashboard = () => {
-    const [activeTab, setActiveTab] = useState('dashboard');
-    const [user, setUser] = useState(null);
     const navigate = useNavigate();
+    const location = useLocation();
+    const [user, setUser] = useState(null);
+    const [activeTab, setActiveTab] = useState(() => {
+        const params = new URLSearchParams(location.search);
+        return params.get('tab') || 'dashboard';
+    });
+
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const tab = params.get('tab') || 'dashboard';
+        if (tab !== activeTab) {
+            setActiveTab(tab);
+        }
+    }, [location.search, activeTab]);
 
     useEffect(() => {
         const u = getCurrentUser();
@@ -36,9 +48,18 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleTabChange = (tabId) => {
+        if (tabId === 'dashboard') {
+            navigate('/admin/dashboard');
+        } else {
+            navigate(`/admin/dashboard?tab=${tabId}`);
+        }
+        setActiveTab(tabId);
+    };
+
     return (
         <div className="flex h-screen bg-slate-50 dark:bg-[#0a0a0f]">
-            <AdminSidebar activeTab={activeTab} onTabChange={setActiveTab} />
+            <AdminSidebar activeTab={activeTab} onTabChange={handleTabChange} />
             <main className="flex-1 overflow-y-auto">
                 <div className="p-8">{renderTab()}</div>
             </main>

@@ -18,18 +18,24 @@ export const getStudyRooms = async () => {
     }
 };
 
-export const getRoomMessages = async (roomId) => {
+export const getRoomMessages = async (roomId, userId = null, passcode = null) => {
     try {
-        const response = await api.get(`/studyrooms/${roomId}/messages`);
+        const params = {};
+        if (userId) params.userId = userId;
+        if (passcode) params.passcode = passcode;
+        const response = await api.get(`/studyrooms/${roomId}/messages`, { params });
         return response.data;
     } catch (error) {
         throw error.response?.data || { message: 'Failed to get room messages' };
     }
 };
 
-export const getStudyRoom = async (roomId) => {
+export const getStudyRoom = async (roomId, userId = null, passcode = null) => {
     try {
-        const response = await api.get(`/studyrooms/${roomId}`);
+        const params = {};
+        if (userId) params.userId = userId;
+        if (passcode) params.passcode = passcode;
+        const response = await api.get(`/studyrooms/${roomId}`, { params });
         return response.data;
     } catch (error) {
         throw error.response?.data || { message: 'Failed to get study room' };

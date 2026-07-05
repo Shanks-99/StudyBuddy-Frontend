@@ -397,40 +397,40 @@ const StudyBuddyLobby = () => {
                                 initial={{ opacity: 0, scale: 0.95 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 exit={{ opacity: 0, scale: 0.95 }}
-                                className="rounded-3xl p-8 relative overflow-hidden shadow-2xl border bg-white border-slate-200 dark:bg-[#191121] dark:border-white/10 w-full max-w-md"
+                                className="rounded-3xl p-8 relative overflow-hidden shadow-2xl border bg-white border-slate-200 dark:bg-[#191121] dark:border-white/10 w-full max-w-md max-h-[85vh] flex flex-col"
                             >
                                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-80 h-40 bg-purple-500/10 dark:bg-[#8c30e8]/20 rounded-full blur-[80px] pointer-events-none" />
 
                                 <button
                                     onClick={() => setIsCreateOpen(false)}
-                                    className="absolute top-5 right-5 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white transition-colors z-10"
+                                    className="absolute top-5 right-5 p-1.5 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-white/40 dark:hover:bg-white/10 dark:hover:text-white transition-colors z-20"
                                 >
                                     <X size={18} />
                                 </button>
 
-                                <div className="relative z-10">
-                                    <div className="flex justify-center mb-4">
+                                <div className="relative z-10 flex flex-col flex-1 overflow-hidden">
+                                    <div className="flex justify-center mb-2">
                                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 dark:from-[#8c30e8] dark:to-purple-900 flex items-center justify-center shadow-lg shadow-purple-500/20">
                                             <UserPlus size={22} className="text-white" />
                                         </div>
                                     </div>
                                     
-                                    <h2 className="text-2xl font-black text-center text-slate-900 dark:text-white mb-6">
+                                    <h2 className="text-2xl font-black text-center text-slate-900 dark:text-white mb-4">
                                         Study with a Buddy
                                     </h2>
 
-                                    <form onSubmit={handleCreateRoom} className="space-y-4">
+                                    <form onSubmit={handleCreateRoom} className="space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar">
                                         <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1.5">
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1">
                                                 Session Subject
                                             </label>
                                             <select
                                                 value={subject}
                                                 onChange={(e) => setSubject(e.target.value)}
-                                                className="w-full px-4 py-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                                className="w-full px-4 py-2.5 text-sm rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
                                             >
                                                 {SUBJECTS.filter(s => s.name !== 'All').map(sub => (
-                                                    <option key={sub.name} value={sub.name} className="dark:bg-[#1a1524]">
+                                                    <option key={sub.name} value={sub.name} className="dark:bg-[#1a1524] text-sm">
                                                         {sub.name}
                                                     </option>
                                                 ))}
@@ -438,7 +438,7 @@ const StudyBuddyLobby = () => {
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1.5">
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1">
                                                 Request Title
                                             </label>
                                             <input
@@ -447,25 +447,25 @@ const StudyBuddyLobby = () => {
                                                 value={name}
                                                 onChange={(e) => setName(e.target.value)}
                                                 placeholder="e.g. Prep for CS Midterm"
-                                                className="w-full px-4 py-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-gray-500 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                                className="w-full px-4 py-2.5 text-sm rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-gray-500 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
                                             />
                                         </div>
 
                                         <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1.5">
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1">
                                                 Session Details
                                             </label>
                                             <textarea
                                                 value={description}
                                                 onChange={(e) => setDescription(e.target.value)}
                                                 placeholder="What notes/topics are we covering? (e.g. solving arrays, recursion)"
-                                                rows="3"
-                                                className="w-full px-4 py-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-gray-500 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8] resize-none"
+                                                rows="2"
+                                                className="w-full px-4 py-2.5 text-sm rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-gray-500 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8] resize-none"
                                             />
                                         </div>
 
                                         {/* Privacy Toggle */}
-                                        <div className="pt-2">
+                                        <div className="pt-1">
                                             <label className="flex items-center gap-3 cursor-pointer">
                                                 <input
                                                     type="checkbox"
@@ -473,7 +473,7 @@ const StudyBuddyLobby = () => {
                                                     onChange={(e) => setIsPrivate(e.target.checked)}
                                                     className="w-4 h-4 text-purple-600 rounded bg-slate-100 border-slate-300 dark:bg-[#1a1524] dark:border-white/10"
                                                 />
-                                                <span className="text-sm font-medium text-slate-700 dark:text-gray-300 flex items-center gap-1.5 select-none">
+                                                <span className="text-xs font-medium text-slate-700 dark:text-gray-300 flex items-center gap-1.5 select-none">
                                                     <Lock size={14} className="text-slate-400" /> Private Room (requires passcode)
                                                 </span>
                                             </label>
@@ -488,8 +488,8 @@ const StudyBuddyLobby = () => {
                                                     exit={{ height: 0, opacity: 0 }}
                                                     className="overflow-hidden"
                                                 >
-                                                    <div className="pt-2">
-                                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1.5">
+                                                    <div className="pt-1">
+                                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-gray-400 mb-1">
                                                             Set Passcode
                                                         </label>
                                                         <input
@@ -498,7 +498,7 @@ const StudyBuddyLobby = () => {
                                                             value={passcode}
                                                             onChange={(e) => setPasscode(e.target.value)}
                                                             placeholder="Set numeric or text code"
-                                                            className="w-full px-4 py-3 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-gray-500 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
+                                                            className="w-full px-4 py-2.5 text-sm rounded-xl border bg-slate-50 border-slate-200 text-slate-900 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 placeholder-slate-400 dark:bg-[#1a1524] dark:border-white/10 dark:text-white dark:placeholder-gray-500 dark:focus:border-[#8c30e8] dark:focus:ring-[#8c30e8]"
                                                         />
                                                     </div>
                                                 </motion.div>
@@ -508,7 +508,7 @@ const StudyBuddyLobby = () => {
                                         <button
                                             type="submit"
                                             disabled={!name.trim() || isCreating}
-                                            className="w-full mt-6 py-3.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 dark:from-[#8c30e8] dark:to-purple-900 dark:hover:from-[#9c4be9] text-white rounded-xl font-bold shadow-lg hover:shadow-purple-500/40 transition-all flex items-center justify-center disabled:opacity-50"
+                                            className="w-full mt-4 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 dark:from-[#8c30e8] dark:to-purple-900 dark:hover:from-[#9c4be9] text-white rounded-xl font-bold shadow-lg hover:shadow-purple-500/40 transition-all flex items-center justify-center disabled:opacity-50 text-sm shrink-0"
                                         >
                                             {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Launch Study Request'}
                                         </button>

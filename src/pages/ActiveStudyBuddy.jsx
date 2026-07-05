@@ -76,7 +76,7 @@ const ActiveStudyBuddy = () => {
     // Chat states
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
-    const [isChatOpen, setIsChatOpen] = useState(true);
+    const [isNotesOpen, setIsNotesOpen] = useState(true);
 
     // WebRTC / Call states
     const [stream, setStream] = useState(null);
@@ -671,7 +671,7 @@ const ActiveStudyBuddy = () => {
                                 {room?.name} <span className="text-xs font-normal text-slate-400">({room?.subject})</span>
                             </h2>
                             <p className="text-[10px] text-slate-400 font-medium">
-                                Enforced 2-Person Session &bull; P2P Co-Studying
+                                P2P Co-Studying
                             </p>
                         </div>
                     </div>
@@ -771,104 +771,8 @@ const ActiveStudyBuddy = () => {
                             </div>
                         </div>
 
-                        {/* Synced Pomodoro & Notes Dashboard */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-                            
-                            {/* Synced Pomodoro Widget */}
-                            <div className="bg-slate-950/60 border border-white/5 rounded-3xl p-6 flex flex-col items-center relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 rounded-full -mr-6 -mt-6 blur-xl" />
-                                <span className="text-[10px] font-bold text-[#8c30e8] uppercase tracking-widest bg-[#8c30e8]/10 border border-[#8c30e8]/20 px-2.5 py-0.5 rounded-full mb-4">
-                                    {timerType === 'study' ? '🔥 Focus Session' : '☕ Rest Break'}
-                                </span>
-                                
-                                <div className="text-5xl font-black text-slate-100 tracking-tighter my-2 font-mono">
-                                    {formatTime(timerRemaining)}
-                                </div>
-
-                                <div className="flex items-center gap-2 mt-4 w-full">
-                                    <button
-                                        onClick={toggleSharedTimer}
-                                        className={`flex-1 py-2 px-3.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                                            timerActive 
-                                                ? 'bg-amber-600/20 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20' 
-                                                : 'bg-[#8c30e8] hover:bg-[#9c4be9] text-white'
-                                        }`}
-                                    >
-                                        {timerActive ? <Pause size={14} /> : <Play size={14} />}
-                                        {timerActive ? 'Pause' : 'Start'}
-                                    </button>
-                                    <button
-                                        onClick={resetSharedTimer}
-                                        className="bg-slate-900 border border-white/5 text-slate-300 hover:bg-white/5 p-2 rounded-xl"
-                                        title="Reset Timer"
-                                    >
-                                        <RotateCcw size={14} />
-                                    </button>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-1 mt-6 w-full">
-                                    <button
-                                        onClick={() => changeTimerDuration(25, 'study')}
-                                        className="py-1 text-[9px] font-bold rounded-lg border bg-slate-900 border-white/5 text-slate-400 hover:text-white"
-                                    >
-                                        25m
-                                    </button>
-                                    <button
-                                        onClick={() => changeTimerDuration(50, 'study')}
-                                        className="py-1 text-[9px] font-bold rounded-lg border bg-slate-900 border-white/5 text-slate-400 hover:text-white"
-                                    >
-                                        50m
-                                    </button>
-                                    <button
-                                        onClick={() => changeTimerDuration(5, 'break')}
-                                        className="py-1 text-[9px] font-bold rounded-lg border bg-slate-900 border-white/5 text-slate-400 hover:text-white"
-                                    >
-                                        Break
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Collaborative Notes Area (fills remaining column space) */}
-                            <div className="lg:col-span-2 bg-slate-950/60 border border-white/5 rounded-3xl p-6 flex flex-col relative h-[300px]">
-                                <div className="flex items-center justify-between mb-3 border-b border-white/5 pb-3">
-                                    <div className="flex items-center gap-2">
-                                        <FileText size={18} className="text-[#8c30e8]" />
-                                        <h3 className="text-sm font-bold text-slate-200">Shared Study Pad</h3>
-                                    </div>
-                                    <div className="flex items-center gap-1.5">
-                                        {isBuddyTyping && (
-                                            <span className="text-[10px] text-purple-400 animate-pulse mr-2 font-medium">
-                                                {partnerName} is typing...
-                                            </span>
-                                        )}
-                                        <button
-                                            onClick={handleCopyNotes}
-                                            className="p-1.5 hover:bg-white/5 rounded text-slate-400 hover:text-white"
-                                            title="Copy Notes"
-                                        >
-                                            <Clipboard size={14} />
-                                        </button>
-                                        <button
-                                            onClick={handleDownloadNotes}
-                                            className="p-1.5 hover:bg-white/5 rounded text-slate-400 hover:text-white"
-                                            title="Download Notes"
-                                        >
-                                            <Download size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <textarea
-                                    value={notes}
-                                    onChange={handleNotesChange}
-                                    placeholder="Type anything here! Notes are synced instantly between both screen views and saved automatically."
-                                    className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-slate-300 focus:ring-0 focus:outline-none placeholder-slate-600 custom-scrollbar leading-relaxed"
-                                />
-                            </div>
-                        </div>
-
                         {/* Co-Studying session checklist / Goals */}
-                        <div className="bg-slate-950/60 border border-white/5 rounded-3xl p-6 flex flex-col">
+                        <div className="bg-slate-950/60 border border-white/5 rounded-3xl p-6 flex flex-col flex-1 min-h-[300px]">
                             <div className="flex items-center gap-2 border-b border-white/5 pb-3 mb-4">
                                 <CheckSquare size={18} className="text-[#8c30e8]" />
                                 <h3 className="text-sm font-bold text-slate-200">Shared Session Objectives</h3>
@@ -892,7 +796,7 @@ const ActiveStudyBuddy = () => {
                             </form>
 
                             {/* Todo List */}
-                            <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                            <div className="space-y-2 overflow-y-auto custom-scrollbar pr-1 flex-1">
                                 {todos.length > 0 ? (
                                     todos.map((todo) => (
                                         <div
@@ -917,7 +821,7 @@ const ActiveStudyBuddy = () => {
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="text-center py-6 text-slate-500 text-xs font-medium">
+                                    <div className="text-center py-12 text-slate-500 text-xs font-medium">
                                         No objectives set yet. Add items above to coordinate your study path!
                                     </div>
                                 )}
@@ -926,9 +830,9 @@ const ActiveStudyBuddy = () => {
 
                     </div>
 
-                    {/* Right Column: Sliding Side Chat Bar */}
+                    {/* Right Column: Sliding Study Pad Bar */}
                     <AnimatePresence>
-                        {isChatOpen && (
+                        {isNotesOpen && (
                             <motion.div
                                 initial={{ width: 0, opacity: 0 }}
                                 animate={{ width: 340, opacity: 1 }}
@@ -937,69 +841,58 @@ const ActiveStudyBuddy = () => {
                             >
                                 <div className="p-4 border-b border-white/5 flex items-center justify-between bg-slate-950/60">
                                     <div className="flex items-center gap-2">
-                                        <MessageSquare size={16} className="text-[#8c30e8]" />
-                                        <span className="text-xs font-bold text-slate-200">Session Chat</span>
+                                        <FileText size={16} className="text-[#8c30e8]" />
+                                        <span className="text-xs font-bold text-slate-200">Shared Study Pad</span>
                                     </div>
-                                    <button
-                                        onClick={() => setIsChatOpen(false)}
-                                        className="text-slate-400 hover:text-white"
-                                    >
-                                        <X size={16} />
-                                    </button>
+                                    <div className="flex items-center gap-1.5">
+                                        {isBuddyTyping && (
+                                            <span className="text-[10px] text-purple-400 animate-pulse mr-2 font-medium">
+                                                Typing...
+                                            </span>
+                                        )}
+                                        <button
+                                            onClick={handleCopyNotes}
+                                            className="p-1 hover:bg-white/5 rounded text-slate-400 hover:text-white"
+                                            title="Copy Notes"
+                                        >
+                                            <Clipboard size={14} />
+                                        </button>
+                                        <button
+                                            onClick={handleDownloadNotes}
+                                            className="p-1 hover:bg-white/5 rounded text-slate-400 hover:text-white"
+                                            title="Download Notes"
+                                        >
+                                            <Download size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => setIsNotesOpen(false)}
+                                            className="text-slate-400 hover:text-white ml-1"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    </div>
                                 </div>
 
-                                {/* Messages scrolling list */}
-                                <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                                    {messages.map((msg, index) => {
-                                        const isMe = String(msg.sender?._id || msg.sender) === String(userId);
-                                        const alignment = isMe ? 'justify-end' : 'justify-start';
-                                        const bubbleStyle = isMe 
-                                            ? 'bg-gradient-to-tr from-purple-600 to-indigo-600 text-white rounded-br-none' 
-                                            : 'bg-slate-900 border border-white/5 text-slate-200 rounded-bl-none';
-
-                                        return (
-                                            <div key={index} className={`flex ${alignment}`}>
-                                                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-xs shadow-md ${bubbleStyle}`}>
-                                                    {!isMe && (
-                                                        <div className="font-bold text-[10px] text-purple-400 mb-1">
-                                                            {msg.sender?.name || 'Buddy'}
-                                                        </div>
-                                                    )}
-                                                    <p className="leading-relaxed break-words">{msg.text}</p>
-                                                    <span className="block text-[8px] text-slate-400/60 text-right mt-1 font-mono">
-                                                        {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    <div ref={messagesEndRef} />
-                                </div>
-
-                                {/* Chat input */}
-                                <form onSubmit={handleSendMessage} className="p-4 border-t border-white/5 bg-slate-950/60 flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={newMessage}
-                                        onChange={(e) => setNewMessage(e.target.value)}
-                                        placeholder="Send a message..."
-                                        className="flex-1 bg-slate-900 border border-white/5 rounded-xl px-4 py-2.5 text-xs text-slate-300 focus:outline-none focus:border-[#8c30e8] placeholder-slate-600"
+                                {/* Collaborative Notes Textarea */}
+                                <div className="flex-1 p-4 flex flex-col">
+                                    <textarea
+                                        value={notes}
+                                        onChange={handleNotesChange}
+                                        placeholder="Type anything here! Notes are synced instantly and saved automatically."
+                                        className="flex-1 bg-transparent border-none outline-none resize-none text-sm text-slate-300 focus:ring-0 focus:outline-none placeholder-slate-600 custom-scrollbar leading-relaxed"
                                     />
-                                    <button type="submit" className="bg-[#8c30e8] hover:bg-[#9c4be9] text-white p-2.5 rounded-xl transition-all">
-                                        <Send size={14} />
-                                    </button>
-                                </form>
+                                </div>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
                     {/* Chat toggle button when closed */}
-                    {!isChatOpen && (
+                    {!isNotesOpen && (
                         <button
-                            onClick={() => setIsChatOpen(true)}
+                            onClick={() => setIsNotesOpen(true)}
                             className="absolute bottom-6 right-6 z-20 w-12 h-12 rounded-full bg-[#8c30e8] hover:bg-[#9c4be9] shadow-xl flex items-center justify-center text-white cursor-pointer transition-transform hover:-translate-y-0.5"
                         >
-                            <MessageSquare size={20} />
+                            <FileText size={20} />
                         </button>
                     )}
 

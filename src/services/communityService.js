@@ -84,3 +84,21 @@ export const getTrendingPosts = async () => {
         throw error.response?.data || { message: "Failed to fetch trending" };
     }
 };
+
+export const getCommunityReports = async () => {
+    try {
+        const response = await api.get("/community/reports");
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: "Failed to fetch community reports" };
+    }
+};
+
+export const handleCommunityReport = async (reportId, action) => {
+    try {
+        const response = await api.put(`/community/reports/${reportId}`, { action });
+        return response.data;
+    } catch (error) {
+        throw error.response?.data || { message: "Failed to process community report" };
+    }
+};

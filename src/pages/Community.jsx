@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import InstructorSidebar from '../components/InstructorSidebar';
+import AdminSidebar from '../components/AdminSidebar';
 import { getCurrentUser } from '../services/authService';
 import {
     getCommunityPosts,
@@ -37,8 +40,16 @@ import {
     BookOpen,
     Sparkles,
     Search,
+    Users,
+    CalendarDays,
+    CreditCard,
+    DollarSign,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+    joinGroupSession,
+    joinPaymentSent,
+} from '../services/groupSessionService';
 
 /* ────────────────── Constants ────────────────── */
 
@@ -49,6 +60,7 @@ const CATEGORIES = [
     { id: 'study-tips', label: 'Study Tips', icon: Lightbulb, color: 'amber' },
     { id: 'resource', label: 'Resources', icon: BookOpen, color: 'pink' },
     { id: 'achievement', label: 'Achievements', icon: Trophy, color: 'orange' },
+    { id: 'group-session', label: 'Group Sessions', icon: Users, color: 'emerald' },
 ];
 
 const SORT_OPTIONS = [
@@ -73,6 +85,7 @@ const getCategoryMeta = (cat) => {
         'study-tips': { icon: Lightbulb, label: 'Study Tip', bg: 'bg-amber-500/10', text: 'text-amber-500 dark:text-amber-400', border: 'border-amber-500/30' },
         resource: { icon: BookOpen, label: 'Resource', bg: 'bg-pink-500/10', text: 'text-pink-500 dark:text-pink-400', border: 'border-pink-500/30' },
         achievement: { icon: Trophy, label: 'Achievement', bg: 'bg-orange-500/10', text: 'text-orange-500 dark:text-orange-400', border: 'border-orange-500/30' },
+        'group-session': { icon: Users, label: 'Group Session', bg: 'bg-emerald-500/10', text: 'text-emerald-500 dark:text-emerald-400', border: 'border-emerald-500/30' },
     };
     return map[cat] || map.discussion;
 };
@@ -121,9 +134,21 @@ const getGradient = (name) => {
     return AVATAR_GRADIENTS[Math.abs(hash) % AVATAR_GRADIENTS.length];
 };
 
+const renderPostContent = (text) => {
+    if (!text) return null;
+    const parts = text.split('**');
+    return parts.map((part, i) => {
+        if (i % 2 === 1) {
+            return <strong key={i} className="font-bold text-slate-900 dark:text-white">{part}</strong>;
+        }
+        return part;
+    });
+};
+
 /* ────────────────── Component ────────────────── */
 
 const Community = () => {
+    const navigate = useNavigate();
     const user = getCurrentUser();
     const userId = user?.id;
 
@@ -142,6 +167,11 @@ const Community = () => {
 
     // Trending
     const [trending, setTrending] = useState([]);
+    const topTrendingPosts = React.useMemo(() => {
+        return [...trending]
+            .sort((a, b) => (b.likes?.length || 0) - (a.likes?.length || 0))
+            .slice(0, 3);
+    }, [trending]);
 
     // Create modal
     const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -168,6 +198,10 @@ const Community = () => {
     // Expanded posts (for "read more")
     const [expandedPosts, setExpandedPosts] = useState({});
 
+    // Group Session Join State
+    const [joiningSession, setJoiningSession] = useState(null);
+    const [isJoining, setIsJoining] = useState(false);
+
     /* ── Debounce Search ── */
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -193,6 +227,47 @@ const Community = () => {
     }, [activeSort, activeCategory, page, debouncedSearch]);
 
     useEffect(() => { fetchPosts(); }, [fetchPosts]);
+
+    const handleJoinGroupSession = async (gsId) => {
+        setIsJoining(true);
+        try {
+            const updatedSession = await joinGroupSession(gsId);
+            setJoiningSession(updatedSession);
+            fetchPosts();
+            alert("Successfully requested to join group session! Please complete the payment process.");
+        } catch (error) {
+            alert(error?.response?.data?.msg || "Failed to join group session.");
+        } finally {
+            setIsJoining(false);
+        }
+    };
+
+    const handleGrabYourSeat = async (gsId) => {
+        setIsJoining(true);
+        try {
+            await joinGroupSession(gsId);
+            fetchPosts();
+            alert("Session request sent.");
+        } catch (error) {
+            alert(error?.response?.data?.msg || "Failed to submit request.");
+        } finally {
+            setIsJoining(false);
+        }
+    };
+
+    const handleConfirmJoinPayment = async (gsId) => {
+        setIsJoining(true);
+        try {
+            const updatedSession = await joinPaymentSent(gsId);
+            setJoiningSession(updatedSession);
+            fetchPosts();
+            alert("Payment marked sent! Mentor will verify and approve your entry shortly.");
+        } catch (error) {
+            alert(error?.response?.data?.msg || "Failed to mark payment as sent.");
+        } finally {
+            setIsJoining(false);
+        }
+    };
 
     /* ── Fetch Trending ── */
     useEffect(() => {
@@ -331,14 +406,20 @@ const Community = () => {
                 <div className="absolute top-[40%] right-[20%] w-[400px] h-[400px] bg-pink-500/5 dark:bg-fuchsia-900/10 rounded-full blur-[100px]" />
             </div>
 
-            <Sidebar />
+            {user?.role === 'admin' ? (
+                <AdminSidebar activeTab="community" onTabChange={(tabId) => navigate(`/admin/dashboard?tab=${tabId}`)} />
+            ) : user?.role === 'teacher' ? (
+                <InstructorSidebar activeTab="community" onTabChange={(tabId) => navigate(`/instructor-dashboard?tab=${tabId}`)} />
+            ) : (
+                <Sidebar activeTab="community" onTabChange={(tabId) => navigate(`/student-dashboard?tab=${tabId}`)} />
+            )}
 
             <div className="flex-1 flex flex-col overflow-y-auto w-full relative z-10 custom-scrollbar">
 
                 {/* ── Header ── */}
                 <div className="px-8 pt-8 pb-4">
                     <div className="max-w-6xl mx-auto">
-                        <div className="flex items-center justify-between mb-6">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                             <div>
                                 <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-purple-500/20">
@@ -348,51 +429,34 @@ const Community = () => {
                                 </h1>
                                 <p className="text-slate-500 dark:text-slate-400 mt-1.5">Share ideas, ask questions, and grow together</p>
                             </div>
-                            <button
-                                onClick={() => setIsCreateOpen(true)}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
-                            >
-                                <Plus size={18} />
-                                Create Post
-                            </button>
-                        </div>
-
-                        {/* Stats Row */}
-                        <div className="flex gap-4 mb-6">
-                            {[
-                                { label: 'Total Posts', value: totalPosts, icon: MessageSquare, color: 'purple' },
-                                { label: 'Trending', value: trending.length, icon: Flame, color: 'orange' },
-                            ].map((stat) => (
-                                <div key={stat.label} className="flex items-center gap-3 px-4 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] rounded-xl">
-                                    <div className={`w-8 h-8 rounded-lg ${colorMap[stat.color].bg} flex items-center justify-center`}>
-                                        <stat.icon size={16} className={colorMap[stat.color].text} />
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400">{stat.label}</p>
-                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{stat.value}</p>
-                                    </div>
+                            <div className="flex items-center gap-3 w-full md:w-auto flex-wrap md:flex-nowrap">
+                                {/* Search Bar */}
+                                <div className="relative w-full md:w-64">
+                                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Search posts..."
+                                        className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-sm text-slate-700 dark:text-white placeholder-slate-400 outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/10 transition-all"
+                                    />
+                                    {searchTerm && (
+                                        <button
+                                            onClick={() => setSearchTerm('')}
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
                                 </div>
-                            ))}
-                        </div>
-
-                        {/* Search Bar */}
-                        <div className="relative mb-4">
-                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search posts by keyword..."
-                                className="w-full pl-10 pr-10 py-2.5 bg-white dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.08] rounded-xl text-sm text-slate-700 dark:text-white placeholder-slate-400 outline-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/10 transition-all"
-                            />
-                            {searchTerm && (
                                 <button
-                                    onClick={() => setSearchTerm('')}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                                    onClick={() => setIsCreateOpen(true)}
+                                    className="flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-semibold rounded-xl shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] w-full md:w-auto shrink-0"
                                 >
-                                    <X size={14} />
+                                    <Plus size={18} />
+                                    Create Post
                                 </button>
-                            )}
+                            </div>
                         </div>
 
                         {/* Category Filter Tabs */}
@@ -487,9 +551,13 @@ const Community = () => {
                                                         {/* Author Header */}
                                                         <div className="flex items-start justify-between mb-3">
                                                             <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getGradient(post.author?.name)} flex items-center justify-center text-white text-sm font-bold shadow-md`}>
-                                                                    {getInitials(post.author?.name)}
-                                                                </div>
+                                                                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getGradient(post.author?.name)} flex items-center justify-center text-white text-sm font-bold shadow-md overflow-hidden`}>
+                                                                     {post.author?.avatar ? (
+                                                                         <img src={post.author.avatar} alt={post.author.name} className="w-full h-full object-cover" />
+                                                                     ) : (
+                                                                         getInitials(post.author?.name)
+                                                                     )}
+                                                                 </div>
                                                                 <div>
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="font-semibold text-sm text-slate-900 dark:text-white">{post.author?.name || 'Unknown'}</span>
@@ -535,9 +603,9 @@ const Community = () => {
 
                                                         {/* Post Content */}
                                                         <div className="mb-4">
-                                                            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                                                                {isLong && !isExpanded ? post.content.slice(0, 280) + '...' : post.content}
-                                                            </p>
+                                                            <div className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                                                {renderPostContent(isLong && !isExpanded ? post.content.slice(0, 280) + '...' : post.content)}
+                                                            </div>
                                                             {isLong && (
                                                                 <button
                                                                     onClick={() => setExpandedPosts(prev => ({ ...prev, [post._id]: !isExpanded }))}
@@ -547,6 +615,99 @@ const Community = () => {
                                                                 </button>
                                                             )}
                                                         </div>
+
+                                                        {/* Group Session Details Card */}
+                                                        {post.category === 'group-session' && post.groupSessionRef && (
+                                                            <div className="mb-4 p-5 rounded-2xl border border-slate-200 dark:border-white/[0.08] bg-slate-50 dark:bg-black/25 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                                <div className="space-y-2">
+                                                                    <h4 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                                                        <Users className="text-purple-500 w-5 h-5" />
+                                                                        {post.groupSessionRef.topic}
+                                                                    </h4>
+                                                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                                                        {post.groupSessionRef.description}
+                                                                    </p>
+                                                                </div>
+                                                                
+                                                                {/* Action Button */}
+                                                                <div className="shrink-0">
+                                                                    {(() => {
+                                                                        const gs = post.groupSessionRef;
+                                                                        const isMentor = String(gs.mentor) === String(userId);
+                                                                        
+                                                                        if (isMentor) {
+                                                                            return (
+                                                                                <span className="px-4 py-2 text-xs font-bold bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-500/20">
+                                                                                    You are the Mentor
+                                                                                </span>
+                                                                            );
+                                                                        }
+                                                                        
+                                                                        if (user?.role && user.role !== 'student') {
+                                                                            return (
+                                                                                <span className="px-4 py-2 text-xs font-bold bg-slate-500/10 text-slate-500 rounded-xl border border-slate-500/20">
+                                                                                    {user.role === 'admin' ? 'Admin View' : 'Instructor View'}
+                                                                                </span>
+                                                                            );
+                                                                        }
+
+                                                                        const participant = gs.participants?.find(p => String(p.student?._id || p.student) === String(userId));
+                                                                        
+                                                                        if (participant) {
+                                                                            if (participant.paymentStatus === 'verified') {
+                                                                                return (
+                                                                                    <span className="px-4 py-2 text-xs font-bold bg-green-500/10 text-green-600 dark:text-green-400 rounded-xl border border-green-500/20 flex items-center gap-1.5">
+                                                                                        <CheckCircle2 size={14} /> Joined
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            if (participant.paymentStatus === 'sent') {
+                                                                                return (
+                                                                                    <span className="px-4 py-2 text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl border border-blue-500/20 flex items-center gap-1.5">
+                                                                                        <Clock size={14} /> Awaiting Verification
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            if (participant.paymentStatus === 'pending') {
+                                                                                return (
+                                                                                    <span className="px-4 py-2 text-xs font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-500/20 flex items-center gap-1.5">
+                                                                                        <Clock size={14} /> Session Request Sent
+                                                                                    </span>
+                                                                                );
+                                                                            }
+                                                                            // accepted or rejected
+                                                                            return (
+                                                                                <button
+                                                                                    onClick={() => setJoiningSession(gs)}
+                                                                                    className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs transition-colors shadow-md"
+                                                                                >
+                                                                                    Complete Payment
+                                                                                </button>
+                                                                            );
+                                                                        }
+                                                                        
+                                                                        const verifiedCount = gs.participants?.filter(p => p.paymentStatus === 'verified').length || 0;
+                                                                        if (verifiedCount >= gs.maxParticipants) {
+                                                                            return (
+                                                                                <span className="px-4 py-2 text-xs font-bold bg-slate-500/10 text-slate-500 rounded-xl border border-slate-500/20">
+                                                                                    Session Full
+                                                                                </span>
+                                                                            );
+                                                                        }
+                                                                        
+                                                                        return (
+                                                                            <button
+                                                                                onClick={() => handleGrabYourSeat(gs._id)}
+                                                                                disabled={isJoining}
+                                                                                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition-all shadow-md hover:shadow-purple-600/25"
+                                                                            >
+                                                                                {isJoining ? "Processing..." : "Grab your seat"}
+                                                                            </button>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                        )}
 
                                                         {/* Action Bar */}
                                                         <div className="flex items-center gap-1 pt-3 border-t border-slate-100 dark:border-white/[0.04]">
@@ -693,11 +854,11 @@ const Community = () => {
                                     </div>
                                     <h3 className="font-bold text-sm text-slate-900 dark:text-white">Trending Posts</h3>
                                 </div>
-                                {trending.length === 0 ? (
+                                {topTrendingPosts.length === 0 ? (
                                     <p className="text-xs text-slate-400 text-center py-4">No trending posts yet</p>
                                 ) : (
                                     <div className="space-y-3">
-                                        {trending.map((tp, idx) => (
+                                        {topTrendingPosts.map((tp, idx) => (
                                             <div key={tp._id} className="flex items-start gap-2.5 group/trend">
                                                 <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-b from-purple-400 to-purple-600 w-6 text-center flex-shrink-0">
                                                     {idx + 1}
@@ -909,6 +1070,88 @@ const Community = () => {
                                         </button>
                                     </>
                                 )}
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+            {/* ════════════════ Join Group Session Modal ════════════════ */}
+            <AnimatePresence>
+                {joiningSession && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        onClick={() => setJoiningSession(null)}
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            transition={{ duration: 0.25 }}
+                            className="bg-white dark:bg-[#1a1225] border border-slate-200 dark:border-white/10 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Modal Header */}
+                            <div className="flex items-center justify-between p-5 border-b border-slate-200 dark:border-white/[0.06] bg-slate-50 dark:bg-black/20">
+                                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <CreditCard size={18} className="text-purple-600 dark:text-[#8c30e8]" />
+                                    Join Group Session
+                                </h2>
+                                <button onClick={() => setJoiningSession(null)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-4">
+                                <div className="space-y-1">
+                                    <h3 className="text-base font-bold text-slate-900 dark:text-white">{joiningSession.topic}</h3>
+                                    <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">Mentor: {joiningSession.mentorName}</p>
+                                </div>
+
+                                <div className="flex items-center gap-4 text-xs font-semibold text-slate-500 dark:text-gray-400">
+                                    <span className="flex items-center gap-1.5"><CalendarDays size={14} /> {joiningSession.dateLabel}</span>
+                                    <span className="flex items-center gap-1.5"><Clock size={14} /> {joiningSession.timeSlot}</span>
+                                </div>
+
+                                <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20 p-4">
+                                    <h4 className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider mb-2">💳 Payment Instructions</h4>
+                                    <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed mb-3">
+                                        Please send Rs. {joiningSession.rate} via one of the following external accounts:
+                                    </p>
+                                    <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1 font-medium pl-1 list-disc list-inside">
+                                        <li>JazzCash: 0300-1234567</li>
+                                        <li>Easypaisa: 0312-7654321</li>
+                                        <li>HBL Bank: PK70 HABB 0012 3456 7890</li>
+                                    </ul>
+                                </div>
+
+                                {(() => {
+                                    const participant = joiningSession.participants?.find(p => String(p.student?._id || p.student) === String(userId));
+                                    
+                                    if (participant?.paymentStatus === 'sent') {
+                                        return (
+                                            <p className="text-center text-sm font-semibold text-blue-600 dark:text-blue-400 py-2">
+                                                ⏳ Payment marked sent! Awaiting verification...
+                                            </p>
+                                        );
+                                    }
+                                    
+                                    return (
+                                        <button
+                                            onClick={() => handleConfirmJoinPayment(joiningSession._id)}
+                                            disabled={isJoining}
+                                            className="w-full py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-purple-600/25 hover:shadow-purple-600/40 transition-all flex items-center justify-center gap-2"
+                                        >
+                                            {isJoining ? (
+                                                <><Loader2 size={16} className="animate-spin" /> Processing...</>
+                                            ) : (
+                                                <><CheckCircle2 size={16} /> I've Sent the Payment</>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </motion.div>
                     </motion.div>

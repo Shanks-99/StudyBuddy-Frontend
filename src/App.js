@@ -60,6 +60,7 @@ function App() {
         <Route path="/studybuddy/:roomId" element={<ActiveStudyBuddy />} />
         <Route path="/community" element={<Community />} />
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

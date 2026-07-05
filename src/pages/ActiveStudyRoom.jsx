@@ -65,11 +65,13 @@ const ActiveStudyRoom = () => {
             return;
         }
 
+        const savedPasscode = sessionStorage.getItem(`studyroom_passcode_${roomId}`);
+
         const fetchHistoryAndDetails = async () => {
             try {
                 const [history, details] = await Promise.all([
-                    getRoomMessages(roomId),
-                    getStudyRoom(roomId)
+                    getRoomMessages(roomId, userId, savedPasscode),
+                    getStudyRoom(roomId, userId, savedPasscode)
                 ]);
                 
                 // Preserve local pending messages during history sync
@@ -296,6 +298,11 @@ const ActiveStudyRoom = () => {
             console.log(`[WebRTC] User joined notification: ${payload.socketId}`);
         });
 
+        socketRef.current.on("room-full", (payload) => {
+            alert(`This room is full. The maximum limit is ${payload.maxParticipants || 10} participants.`);
+            navigate('/studyroom');
+        });
+
         function joinRoomAndProcessQueue() {
             socketRef.current.emit("join-room", { roomId, userId, name: user?.name });
             setIsLoading(false);
@@ -337,6 +344,7 @@ const ActiveStudyRoom = () => {
                 socketRef.current.off("user-left");
                 socketRef.current.off("webrtc-signal");
                 socketRef.current.off("user-joined");
+                socketRef.current.off("room-full");
                 socketRef.current.disconnect();
             }
             if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());

@@ -29,8 +29,17 @@ import {
     Trash2,
     ClipboardList,
     X,
-    UserPlus
+    UserPlus,
+    CreditCard,
+    DollarSign,
+    Users,
 } from 'lucide-react';
+import {
+    getGroupSessionsForStudent,
+    markPaymentSent,
+} from '../services/groupSessionService';
+import { getCommunityPosts } from '../services/communityService';
+import { getResources, trackResourceDownload } from '../services/resourceService';
 
 const fadeIn = {
     initial: { opacity: 0, y: 10 },
@@ -46,6 +55,10 @@ const StudentDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [upcomingSessions, setUpcomingSessions] = useState([]);
     const [focusSessions, setFocusSessions] = useState([]);
+    const [groupSessions, setGroupSessions] = useState([]);
+    const [groupSessionVersion, setGroupSessionVersion] = useState(0);
+    const [communityPosts, setCommunityPosts] = useState([]);
+    const [recentResources, setRecentResources] = useState([]);
     const [activeTab, setActiveTab] = useState(() => {
         const params = new URLSearchParams(location.search);
         return params.get('tab') || 'dashboard';
@@ -109,17 +122,23 @@ const StudentDashboard = () => {
 
         setUser(currentUser);
         fetchDashboardData(currentUser.id || currentUser._id);
-    }, [navigate]);
+    }, [navigate, groupSessionVersion]);
 
     const fetchDashboardData = async (userId) => {
         setLoading(true);
         try {
-            const [sessions, focus] = await Promise.all([
+            const [sessions, focus, groups, postsData, resourcesData] = await Promise.all([
                 getUpcomingSessionsForStudent(),
-                getFocusSessions(userId)
+                getFocusSessions(userId),
+                getGroupSessionsForStudent(),
+                getCommunityPosts('latest', 'all', 1, ''),
+                getResources()
             ]);
             setUpcomingSessions(sessions || []);
             setFocusSessions(focus || []);
+            setGroupSessions(groups || []);
+            setCommunityPosts(postsData?.posts ? postsData.posts.slice(0, 3) : []);
+            setRecentResources(resourcesData ? resourcesData.slice(0, 3) : []);
         } catch (error) {
             console.error("Error fetching dashboard data:", error);
         } finally {
@@ -127,17 +146,31 @@ const StudentDashboard = () => {
         }
     };
 
-    // Filter and Sort Sessions: Only 3 closest upcoming ones
+    // Filter and Sort Sessions: Only 3 closest upcoming ones (both 1-1 and scheduled group sessions)
     const processedSessions = useMemo(() => {
         const now = new Date();
-        return upcomingSessions
-            .map(s => ({
-                ...s,
-                startTime: getSessionStartDateTime(s.dateLabel, s.timeSlot)
-            }))
+        
+        const parsed11 = upcomingSessions.map(s => ({
+            ...s,
+            isGroup: false,
+            startTime: getSessionStartDateTime(s.dateLabel, s.timeSlot)
+        }));
+
+        const parsedGroup = groupSessions
+            .filter(gs => gs.status === 'scheduled')
+            .map(gs => ({
+                ...gs,
+                isGroup: true,
+                mentorName: gs.mentorName,
+                subject: gs.topic, // topic is subject for group session
+                startTime: getSessionStartDateTime(gs.dateLabel, gs.timeSlot),
+                paymentStatus: 'verified' // scheduled group sessions are paid/verified
+            }));
+
+        return [...parsed11, ...parsedGroup]
             .filter(s => s.startTime && s.startTime > new Date(now.getTime() - 60 * 60 * 1000)) // Keep upcoming or joinable
             .sort((a, b) => a.startTime - b.startTime);
-    }, [upcomingSessions]);
+    }, [upcomingSessions, groupSessions]);
 
     const handleToggleTodo = (id) => {
         setTodoItems(prev => prev.map(item =>
@@ -177,6 +210,41 @@ const StudentDashboard = () => {
         setActiveTab(tabId);
     };
 
+    const handleDownloadResource = async (resource) => {
+        try {
+            await trackResourceDownload(resource._id);
+            const parts = resource.fileData.split('|DATA|');
+            const filename = parts[0];
+            const base64Content = parts[1];
+
+            const link = document.createElement("a");
+            link.href = base64Content;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setRecentResources(prev =>
+                prev.map(r => r._id === resource._id ? { ...r, downloadsCount: (r.downloadsCount || 0) + 1 } : r)
+            );
+        } catch (error) {
+            console.error("Download tracking failed:", error);
+            alert("Error downloading file.");
+        }
+    };
+
+    const timeAgo = (dateStr) => {
+        const diff = Date.now() - new Date(dateStr).getTime();
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return 'Just now';
+        if (mins < 60) return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h ago`;
+        const days = Math.floor(hrs / 24);
+        if (days < 7) return `${days}d ago`;
+        return new Date(dateStr).toLocaleDateString();
+    };
+
     // Calculations for Progress Widget
     const totalMinutes = focusSessions.reduce((acc, s) => acc + (s.duration || 0), 0);
     const totalHours = (totalMinutes / 60).toFixed(1);
@@ -184,17 +252,6 @@ const StudentDashboard = () => {
     const progressPercent = Math.min(Math.round((parseFloat(totalHours) / weeklyGoalHours) * 100), 100);
 
     if (!user) return null;
-
-    const communityPosts = [
-        { title: 'Best study techniques for exams?', replies: 24, trending: true },
-        { title: 'Looking for study group - Calculus', replies: 12, trending: false },
-        { title: 'Free resources for Python learning', replies: 45, trending: true },
-    ];
-
-    const recentResources = [
-        { name: 'Physics Quiz - Kinematics', type: 'Quiz', date: 'Yesterday' },
-        { name: 'Chemistry Summary', type: 'Summary', date: '3 days ago' },
-    ];
 
     return (
         <div className="flex h-screen bg-background dark:bg-[#0a0a0f] text-foreground dark:text-white transition-colors duration-300 overflow-hidden relative font-sans">
@@ -313,7 +370,10 @@ const StudentDashboard = () => {
                                         <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
                                             {processedSessions.length > 0 ? (
                                                 processedSessions.slice(0, 2).map((session, idx) => {
-                                                    const joinable = isSessionJoinableNow(session);
+                                                    const isPaid = session.paymentStatus === 'verified' || session.paymentStatus === 'none';
+                                                    const paymentDue = !isPaid && session.paymentStatus !== 'sent';
+                                                    const joinable = isPaid && isSessionJoinableNow(session);
+
                                                     return (
                                                         <div key={idx} className="bg-slate-50 dark:bg-black/20 border border-slate-100 dark:border-white/5 rounded-xl p-4 hover:shadow-md hover:-translate-y-0.5 transition-all group">
                                                             <div className="flex justify-between items-start mb-3">
@@ -321,21 +381,40 @@ const StudentDashboard = () => {
                                                                     <div className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-purple-600 dark:group-hover:text-[#8c30e8] transition-colors">{session.mentorName}</div>
                                                                     <div className="text-xs font-medium text-slate-500 dark:text-gray-400 mt-1">{session.subject}</div>
                                                                 </div>
+                                                                {paymentDue && (
+                                                                    <span className="px-2 py-0.5 bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 border border-orange-200 dark:border-orange-500/20 text-[10px] font-bold rounded">
+                                                                        Payment Pending
+                                                                    </span>
+                                                                )}
+                                                                {session.paymentStatus === 'sent' && (
+                                                                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20 text-[10px] font-bold rounded">
+                                                                        Checking Payment
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-white/5">
                                                                 <div className="text-[11px] font-bold uppercase tracking-wider text-purple-600 dark:text-[#8c30e8] bg-purple-50 dark:bg-[#8c30e8]/10 px-2 py-1 rounded-md border border-purple-100 dark:border-[#8c30e8]/20">
                                                                     {session.dateLabel} • {session.timeSlot}
                                                                 </div>
-                                                                <button
-                                                                    onClick={() => handleJoinSession(session)}
-                                                                    disabled={!joinable}
-                                                                    className={`px-4 py-1.5 text-xs font-bold rounded-lg shadow-sm transition-all ${joinable
-                                                                            ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse"
-                                                                            : "bg-slate-200 dark:bg-white/5 text-slate-400 cursor-not-allowed"
-                                                                        }`}
-                                                                >
-                                                                    {joinable ? 'JOIN' : 'WAIT'}
-                                                                </button>
+                                                                {paymentDue ? (
+                                                                    <button
+                                                                        onClick={() => navigate('/mentorship')}
+                                                                        className="px-4 py-1.5 text-xs font-bold rounded-lg shadow-sm bg-orange-600 hover:bg-orange-700 text-white"
+                                                                    >
+                                                                        PAY
+                                                                    </button>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => handleJoinSession(session)}
+                                                                        disabled={!joinable}
+                                                                        className={`px-4 py-1.5 text-xs font-bold rounded-lg shadow-sm transition-all ${joinable
+                                                                                ? "bg-purple-600 hover:bg-purple-700 text-white animate-pulse"
+                                                                                : "bg-slate-200 dark:bg-white/5 text-slate-400 cursor-not-allowed"
+                                                                            }`}
+                                                                    >
+                                                                        {joinable ? 'JOIN' : 'WAIT'}
+                                                                    </button>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
@@ -362,6 +441,8 @@ const StudentDashboard = () => {
                                                     See All Sessions ({processedSessions.length})
                                                 </button>
                                             )}
+
+
                                         </div>
                                     </motion.div>
                                 </div>
@@ -486,23 +567,33 @@ const StudentDashboard = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-3">
-                                            {communityPosts.map((post, idx) => (
-                                                <div key={idx} className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 border border-slate-100 dark:border-white/5 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group flex justify-between items-center gap-4">
-                                                    <div className="flex-1">
-                                                        <div className="text-slate-900 dark:text-white font-bold text-sm mb-1.5 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8] transition-colors">
-                                                            {post.title}
+                                            {communityPosts.length > 0 ? (
+                                                communityPosts.map((post, idx) => (
+                                                    <div
+                                                        key={post._id || idx}
+                                                        onClick={() => navigate('/community')}
+                                                        className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 border border-slate-100 dark:border-white/5 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer group flex justify-between items-center gap-4"
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-slate-900 dark:text-white font-bold text-sm mb-1.5 group-hover:text-purple-600 dark:group-hover:text-[#8c30e8] transition-colors truncate">
+                                                                {post.content}
+                                                            </div>
+                                                            <div className="text-xs font-medium text-slate-500 dark:text-gray-400 flex items-center gap-1.5">
+                                                                <MessageSquare className="w-3.5 h-3.5" /> {post.commentCount || 0} replies
+                                                            </div>
                                                         </div>
-                                                        <div className="text-xs font-medium text-slate-500 dark:text-gray-400 flex items-center gap-1.5">
-                                                            <MessageSquare className="w-3.5 h-3.5" /> {post.replies} replies
-                                                        </div>
+                                                        {(post.likes?.length > 0) && (
+                                                            <span className="px-2.5 py-1 bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider rounded-lg border border-orange-200 dark:border-orange-500/20 shrink-0">
+                                                                🔥 Trending
+                                                            </span>
+                                                        )}
                                                     </div>
-                                                    {post.trending && (
-                                                        <span className="px-2.5 py-1 bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400 text-[10px] font-bold uppercase tracking-wider rounded-lg border border-orange-200 dark:border-orange-500/20 shrink-0">
-                                                            🔥 Trending
-                                                        </span>
-                                                    )}
+                                                ))
+                                            ) : (
+                                                <div className="text-xs text-slate-400 text-center py-6">
+                                                    No community posts yet
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                     </motion.div>
 
@@ -515,19 +606,35 @@ const StudentDashboard = () => {
                                             </div>
                                         </div>
                                         <div className="space-y-3">
-                                            {recentResources.map((resource, idx) => (
-                                                <div key={idx} className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 border border-slate-100 dark:border-white/5 hover:shadow-md hover:-translate-y-0.5 transition-all group flex items-center justify-between gap-4">
-                                                    <div className="flex-1">
-                                                        <div className="text-slate-900 dark:text-white font-bold text-sm mb-1">{resource.name}</div>
-                                                        <div className="text-[11px] font-medium text-slate-500 dark:text-gray-400">
-                                                            <span className="text-purple-600 dark:text-[#8c30e8] font-bold uppercase tracking-wider">{resource.type}</span> • {resource.date}
+                                            {recentResources.length > 0 ? (
+                                                recentResources.map((resource, idx) => (
+                                                    <div
+                                                        key={resource._id || idx}
+                                                        onClick={() => handleTabChange('resources')}
+                                                        className="bg-slate-50 dark:bg-black/20 rounded-xl p-4 border border-slate-100 dark:border-white/5 hover:shadow-md hover:-translate-y-0.5 transition-all group flex items-center justify-between gap-4 cursor-pointer"
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="text-slate-900 dark:text-white font-bold text-sm mb-1 truncate">{resource.title}</div>
+                                                            <div className="text-[11px] font-medium text-slate-500 dark:text-gray-400">
+                                                                <span className="text-purple-600 dark:text-[#8c30e8] font-bold uppercase tracking-wider">{resource.category}</span> • {timeAgo(resource.createdAt)}
+                                                            </div>
                                                         </div>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDownloadResource(resource);
+                                                            }}
+                                                            className="p-2 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-gray-300 rounded-lg transition-colors shadow-sm"
+                                                        >
+                                                            <Download className="w-4 h-4" />
+                                                        </button>
                                                     </div>
-                                                    <button className="p-2 bg-slate-200 hover:bg-slate-300 dark:bg-white/10 dark:hover:bg-white/20 text-slate-700 dark:text-gray-300 rounded-lg transition-colors shadow-sm">
-                                                        <Download className="w-4 h-4" />
-                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="text-xs text-slate-400 text-center py-6">
+                                                    No resources uploaded yet
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                     </motion.div>
                                 </div>

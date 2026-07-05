@@ -114,3 +114,18 @@ export const isMentorBusyAt = (mentorName, dateLabel, timeSlot) => {
         })
         .then((response) => Boolean(response.data?.busy));
 };
+
+export const markSessionPaymentSent = async (sessionId) => {
+    const response = await api.patch(`/mentorship/sessions/${sessionId}/payment-sent`);
+    return response.data?.session || null;
+};
+
+export const verifySessionPayment = async (sessionId) => {
+    const response = await api.patch(`/mentorship/sessions/${sessionId}/verify-payment`);
+    return response.data?.session || null;
+};
+
+export const rejectSessionPayment = async (sessionId) => {
+    const response = await api.patch(`/mentorship/sessions/${sessionId}/reject-payment`);
+    return response.data?.session || null;
+};
