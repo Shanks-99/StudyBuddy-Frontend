@@ -51,6 +51,7 @@ const MentorshipCall = () => {
             return null;
         }
     }, []);
+    const userId = user?.id || user?._id;
 
     const [participants, setParticipants] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -113,10 +114,33 @@ const MentorshipCall = () => {
         if (!remoteVideoRef.current || !remoteStream) return;
         if (remoteStreamIdRef.current === remoteStream.id) return;
 
+        // Explicitly enable all audio tracks
+        remoteStream.getAudioTracks().forEach(track => {
+            track.enabled = true;
+            console.log(`[MentorshipCall] Remote audio track enabled: ${track.id}, readyState=${track.readyState}`);
+        });
+
         remoteVideoRef.current.srcObject = remoteStream;
         remoteStreamIdRef.current = remoteStream.id;
         setHasRemoteStream(true);
-        remoteVideoRef.current.play().catch(() => {});
+
+        // Ensure video is unmuted for audio playback
+        remoteVideoRef.current.muted = false;
+        remoteVideoRef.current.volume = 1;
+
+        remoteVideoRef.current.play().catch((e) => {
+            console.warn('[MentorshipCall] Autoplay blocked, waiting for user interaction:', e.message);
+            // Retry playback on first user interaction (click/keypress)
+            const retryPlay = () => {
+                if (remoteVideoRef.current) {
+                    remoteVideoRef.current.play().catch(() => {});
+                }
+                window.removeEventListener('pointerdown', retryPlay);
+                window.removeEventListener('keydown', retryPlay);
+            };
+            window.addEventListener('pointerdown', retryPlay, { once: true });
+            window.addEventListener('keydown', retryPlay, { once: true });
+        });
     };
 
     const startRemoteAttachWatcher = (remoteSocketId) => {
@@ -536,7 +560,7 @@ const MentorshipCall = () => {
         const roomId = callId;
 
         const joinRoom = () => {
-            socket.emit('join-room', { roomId, userId: user.id, name: user.name });
+            socket.emit('join-room', { roomId, userId, name: user.name });
             setIsLoading(false);
         };
 
@@ -558,7 +582,7 @@ const MentorshipCall = () => {
                 remoteSocketIdRef.current = remoteUser.socketId;
                 peerRef.current = createInitiatorPeer(remoteUser.socketId, streamRef.current);
                 flushPendingSignals(remoteUser.socketId);
-                setTimeout(() => flushQueuedIceSignals(remoteUser.socketId), 100);
+                setTimeout(() => flushQueuedIceSignals(remoteUser.socketId), 150);
             }
         });
 

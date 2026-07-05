@@ -83,6 +83,7 @@ const ActiveStudyBuddy = () => {
     const [isAudioMuted, setIsAudioMuted] = useState(false);
     const [isVideoMuted, setIsVideoMuted] = useState(false);
     const [isCallActive, setIsCallActive] = useState(false);
+    const remoteStreamRef = useRef(null);
 
     // End Session metrics
     const [showSummary, setShowSummary] = useState(false);
@@ -185,17 +186,37 @@ const ActiveStudyBuddy = () => {
 
     // --- WebRTC / Simple-Peer Signaling ---
 
-    const destroyPeer = () => {
+    const destroyPeer = useCallback(() => {
         if (peerRef.current) {
             console.log("[WebRTC] Destroying peer connection");
             peerRef.current.destroy();
             peerRef.current = null;
         }
         setIsCallActive(false);
+        remoteStreamRef.current = null;
         if (remoteVideoRef.current) {
             remoteVideoRef.current.srcObject = null;
         }
-    };
+    }, []);
+
+    // Re-attach remote stream when it arrives or when ref becomes available
+    const attachRemoteStream = useCallback((remoteStream) => {
+        if (!remoteStream) return;
+        remoteStreamRef.current = remoteStream;
+        setIsCallActive(true);
+        if (remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.play().catch(() => {});
+        }
+    }, []);
+
+    // Ensure remote stream is attached after render if it was received before element existed
+    useEffect(() => {
+        if (isCallActive && remoteStreamRef.current && remoteVideoRef.current && !remoteVideoRef.current.srcObject) {
+            remoteVideoRef.current.srcObject = remoteStreamRef.current;
+            remoteVideoRef.current.play().catch(() => {});
+        }
+    }, [isCallActive]);
 
     const initiateCall = useCallback((otherSocketId, currentStream) => {
         if (!currentStream) return;
@@ -216,11 +237,8 @@ const ActiveStudyBuddy = () => {
         });
 
         peer.on("stream", remoteStream => {
-            console.log("[WebRTC] Received remote stream");
-            setIsCallActive(true);
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
-            }
+            console.log("[WebRTC] Received remote stream (initiator)");
+            attachRemoteStream(remoteStream);
         });
 
         peer.on("connect", () => {
@@ -239,7 +257,7 @@ const ActiveStudyBuddy = () => {
         });
 
         peerRef.current = peer;
-    }, []);
+    }, [destroyPeer, attachRemoteStream]);
 
     const answerCall = useCallback((incomingSignal, otherSocketId, currentStream) => {
         if (!currentStream) return;
@@ -261,10 +279,7 @@ const ActiveStudyBuddy = () => {
 
         peer.on("stream", remoteStream => {
             console.log("[WebRTC] Received remote stream (answering)");
-            setIsCallActive(true);
-            if (remoteVideoRef.current) {
-                remoteVideoRef.current.srcObject = remoteStream;
-            }
+            attachRemoteStream(remoteStream);
         });
 
         peer.on("connect", () => {
@@ -284,7 +299,7 @@ const ActiveStudyBuddy = () => {
 
         peer.signal(incomingSignal);
         peerRef.current = peer;
-    }, []);
+    }, [destroyPeer, attachRemoteStream]);
 
     // Socket Setup
     useEffect(() => {
@@ -294,8 +309,68 @@ const ActiveStudyBuddy = () => {
         const currentSocket = socketRef.current;
         let localStreamRef = null;
 
-        // Initialize Sockets & Media Devices
-        const initSocketAndMedia = async () => {
+        // Queue for signals that arrive before peer is ready
+        const pendingSignalsRef = [];
+
+        // Register ALL socket listeners FIRST (before join), to prevent race conditions
+        // where signals arrive before listeners are set up
+
+        // Reconcile video connections on join
+        currentSocket.on("buddy-room-users", (users) => {
+            setParticipants(users);
+            const socketId = currentSocket.id;
+            
+            // If there's another user in the room, and I am the host (mySocketId < otherSocketId), initiate WebRTC
+            const other = users.find(u => u.socketId !== socketId);
+            if (other && socketId < other.socketId && localStreamRef) {
+                initiateCall(other.socketId, localStreamRef);
+                // Flush any queued signals for this peer
+                const toFlush = pendingSignalsRef.filter(p => p.from === other.socketId);
+                toFlush.forEach(p => {
+                    if (peerRef.current) {
+                        try {
+                            peerRef.current.signal(p.signal);
+                        } catch (e) {
+                            console.warn("[WebRTC] Error flushing queued signal:", e.message);
+                        }
+                    }
+                });
+                pendingSignalsRef.length = 0;
+            }
+        });
+
+        // Handle incoming WebRTC signals
+        currentSocket.on("webrtc-signal", ({ signal, from }) => {
+            console.log(`[WebRTC] Received signal of type=${signal.type || 'ice'} from socket ${from}`);
+            if (signal.type === 'offer') {
+                answerCall(signal, from, localStreamRef);
+                // Flush any queued ICE candidates for this peer
+                const toFlush = pendingSignalsRef.filter(p => p.from === from && !p.signal.type);
+                toFlush.forEach(p => {
+                    if (peerRef.current) {
+                        try {
+                            peerRef.current.signal(p.signal);
+                        } catch (e) {
+                            console.warn("[WebRTC] Error flushing queued ICE:", e.message);
+                        }
+                    }
+                });
+                pendingSignalsRef.length = 0;
+            } else if (peerRef.current) {
+                try {
+                    peerRef.current.signal(signal);
+                } catch (e) {
+                    console.warn("[WebRTC] Error signaling peer:", e.message);
+                }
+            } else {
+                // Queue signals that arrive before the peer is created
+                console.log(`[WebRTC] Peer not ready, queuing signal from ${from}`);
+                pendingSignalsRef.push({ from, signal });
+            }
+        });
+
+        // Initialize Media Devices, then join room
+        const initMedia = async () => {
             let userMediaStream = null;
             try {
                 // Request camera and microphone access
@@ -309,103 +384,77 @@ const ActiveStudyBuddy = () => {
                 console.warn("[Media] Camera/mic access denied, entering call in listen-only or blank mode", err);
             }
 
-            // Join Room on Socket
+            // Join Room on Socket AFTER media is acquired and listeners are registered
             currentSocket.emit("join-buddy-room", { roomId, userId, name: user?.name });
             setIsLoading(false);
-
-            // Reconcile video connections on join
-            currentSocket.on("buddy-room-users", (users) => {
-                setParticipants(users);
-                const socketId = currentSocket.id;
-                
-                // If there's another user in the room, and I am the host (mySocketId < otherSocketId), initiate WebRTC
-                const other = users.find(u => u.socketId !== socketId);
-                if (other && socketId < other.socketId && localStreamRef) {
-                    initiateCall(other.socketId, localStreamRef);
-                }
-            });
-
-            // Handle incoming WebRTC signals
-            currentSocket.on("webrtc-signal", ({ signal, from }) => {
-                console.log(`[WebRTC] Received signal of type=${signal.type || 'ice'} from socket ${from}`);
-                if (signal.type === 'offer') {
-                    answerCall(signal, from, localStreamRef);
-                } else if (peerRef.current) {
-                    try {
-                        peerRef.current.signal(signal);
-                    } catch (e) {
-                        console.warn("[WebRTC] Error signaling peer:", e.message);
-                    }
-                }
-            });
-
-            // If buddy joins, notify
-            currentSocket.on("buddy-user-joined", (buddyUser) => {
-                console.log("[Socket] Partner joined: ", buddyUser.name);
-            });
-
-            // If buddy leaves or disconnects
-            currentSocket.on("buddy-user-left", (socketId) => {
-                console.log("[Socket] Partner disconnected socket:", socketId);
-                destroyPeer();
-            });
-
-            // If room ended by host
-            currentSocket.on("buddy-session-ended", () => {
-                computeSessionMetrics();
-                setShowSummary(true);
-            });
-
-            // Real-time Chat
-            currentSocket.on("receive-buddy-message", (message) => {
-                setMessages(prev => {
-                    if (prev.some(m => m._id === message._id)) return prev;
-                    return [...prev, message];
-                });
-            });
-
-            // Real-time Notes Sync
-            currentSocket.on("buddy-notes-change", ({ notes: incomingNotes }) => {
-                setNotes(incomingNotes);
-                setIsBuddyTyping(true);
-                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                typingTimeoutRef.current = setTimeout(() => {
-                    setIsBuddyTyping(false);
-                }, 1500);
-            });
-
-            // Real-time Todo Sync
-            currentSocket.on("buddy-todo-change", ({ todos: incomingTodos }) => {
-                setTodos(incomingTodos);
-            });
-
-            // Real-time Timer Sync
-            currentSocket.on("buddy-timer-control", ({ action, value }) => {
-                if (action === 'start') {
-                    setTimerActive(true);
-                } else if (action === 'pause') {
-                    setTimerActive(false);
-                } else if (action === 'reset') {
-                    setTimerActive(false);
-                    setTimerRemaining(value.remaining);
-                    setTimerDuration(value.duration);
-                    setTimerType(value.type);
-                } else if (action === 'change-duration') {
-                    setTimerDuration(value.duration);
-                    setTimerRemaining(value.duration);
-                    setTimerType(value.type);
-                    setTimerActive(false);
-                }
-            });
-
-            // Error full room
-            currentSocket.on("buddy-room-full", ({ message }) => {
-                alert(message);
-                navigate('/studybuddy');
-            });
         };
 
-        initSocketAndMedia();
+        initMedia();
+
+        // If buddy joins, notify
+        currentSocket.on("buddy-user-joined", (buddyUser) => {
+            console.log("[Socket] Partner joined: ", buddyUser.name);
+        });
+
+        // If buddy leaves or disconnects
+        currentSocket.on("buddy-user-left", (socketId) => {
+            console.log("[Socket] Partner disconnected socket:", socketId);
+            destroyPeer();
+        });
+
+        // If room ended by host
+        currentSocket.on("buddy-session-ended", () => {
+            computeSessionMetrics();
+            setShowSummary(true);
+        });
+
+        // Real-time Chat
+        currentSocket.on("receive-buddy-message", (message) => {
+            setMessages(prev => {
+                if (prev.some(m => m._id === message._id)) return prev;
+                return [...prev, message];
+            });
+        });
+
+        // Real-time Notes Sync
+        currentSocket.on("buddy-notes-change", ({ notes: incomingNotes }) => {
+            setNotes(incomingNotes);
+            setIsBuddyTyping(true);
+            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+            typingTimeoutRef.current = setTimeout(() => {
+                setIsBuddyTyping(false);
+            }, 1500);
+        });
+
+        // Real-time Todo Sync
+        currentSocket.on("buddy-todo-change", ({ todos: incomingTodos }) => {
+            setTodos(incomingTodos);
+        });
+
+        // Real-time Timer Sync
+        currentSocket.on("buddy-timer-control", ({ action, value }) => {
+            if (action === 'start') {
+                setTimerActive(true);
+            } else if (action === 'pause') {
+                setTimerActive(false);
+            } else if (action === 'reset') {
+                setTimerActive(false);
+                setTimerRemaining(value.remaining);
+                setTimerDuration(value.duration);
+                setTimerType(value.type);
+            } else if (action === 'change-duration') {
+                setTimerDuration(value.duration);
+                setTimerRemaining(value.duration);
+                setTimerType(value.type);
+                setTimerActive(false);
+            }
+        });
+
+        // Error full room
+        currentSocket.on("buddy-room-full", ({ message }) => {
+            alert(message);
+            navigate('/studybuddy');
+        });
 
         return () => {
             if (currentSocket) {
@@ -427,7 +476,7 @@ const ActiveStudyBuddy = () => {
             if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
             destroyPeer();
         };
-    }, [roomId, userId, initiateCall, answerCall, navigate, user]);
+    }, [roomId, userId, initiateCall, answerCall, destroyPeer, navigate, user]);
 
     // Send chat message
     const handleSendMessage = (e) => {
@@ -748,14 +797,14 @@ const ActiveStudyBuddy = () => {
 
                             {/* Remote Stream (User B) */}
                             <div className="relative aspect-video rounded-3xl bg-slate-950 border border-white/5 overflow-hidden shadow-inner flex items-center justify-center">
-                                {isCallActive ? (
-                                    <video
-                                        ref={remoteVideoRef}
-                                        autoPlay
-                                        playsInline
-                                        className="w-full h-full object-cover rounded-3xl"
-                                    />
-                                ) : (
+                                {/* Always render the video element so the ref is available when the stream arrives */}
+                                <video
+                                    ref={remoteVideoRef}
+                                    autoPlay
+                                    playsInline
+                                    className={`w-full h-full object-cover rounded-3xl ${isCallActive ? 'block' : 'hidden'}`}
+                                />
+                                {!isCallActive && (
                                     <div className="flex flex-col items-center gap-2 text-center p-4">
                                         <div className="w-12 h-12 bg-purple-500/10 rounded-full flex items-center justify-center text-[#8c30e8] animate-pulse">
                                             <Users size={22} />
